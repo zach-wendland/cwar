@@ -67,7 +67,8 @@ const EventResolutionOverlays: React.FC = () => {
         </div>
         {meta.appliedBuff && (
           <div className="buff-chip mt-2">
-            {meta.appliedBuff.type === 'cloutMultiplier' ? '🚀' : '🛡️'} {meta.appliedBuff.label} active (until Turn {meta.appliedBuff.expiresTurn})
+            {meta.appliedBuff.type === 'cloutMultiplier' ? '🚀' : '🛡️'} {meta.appliedBuff.label}
+            {' '}active (until Turn {meta.appliedBuff.expiresTurn})
           </div>
         )}
       </div>
