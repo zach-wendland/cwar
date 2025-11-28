@@ -30,3 +30,113 @@ path.state:hover {
   max-width: 500px;
   width: 90%;
 }
+
+/* Intro Tutorial immersive layout */
+.intro-immersive {
+  background: radial-gradient(circle at 20% 20%, rgba(105, 159, 255, 0.08), transparent 35%),
+              radial-gradient(circle at 80% 0%, rgba(92, 232, 180, 0.08), transparent 40%),
+              linear-gradient(135deg, #0f172a, #0a0f1c 70%, #0d1325);
+  color: #e8f0ff;
+  padding: 1.75rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.intro-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  margin-bottom: 1.25rem;
+  position: relative;
+}
+
+@media (min-width: 992px) {
+  .intro-hero {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+.intro-hero__content {
+  z-index: 1;
+  padding-right: 0.5rem;
+}
+
+.intro-hero__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(86, 147, 255, 0.12), transparent 45%),
+              radial-gradient(circle at 80% 20%, rgba(0, 255, 148, 0.1), transparent 40%);
+  filter: blur(40px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.intro-hero__stats {
+  backdrop-filter: blur(6px);
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+}
+
+.intro-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+  color: #e8f0ff;
+  backdrop-filter: blur(6px);
+}
+
+.intro-panel h5 {
+  color: #c3d8ff;
+  letter-spacing: 0.02em;
+}
+
+.intro-list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 0.75rem;
+}
+
+.intro-list li {
+  position: relative;
+  padding-left: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.intro-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5be7b4, #6fa8ff);
+  box-shadow: 0 0 10px rgba(111, 168, 255, 0.5);
+}
+
+.intro-steps {
+  list-style: decimal;
+  padding-left: 1.2rem;
+  color: #e8f0ff;
+}
+
+.intro-panels {
+  position: relative;
+  z-index: 1;
+}
+
+.intro-immersive h2,
+.intro-immersive h5,
+.intro-immersive h6,
+.intro-immersive p,
+.intro-immersive li {
+  margin-bottom: 0.5rem;
+}
+
+.intro-immersive .badge {
+  letter-spacing: 0.02em;
+}
