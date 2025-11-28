@@ -53,7 +53,9 @@ export function generateEvent(state: GameState): GameEvent {
       outcome: {
         cloutDelta: 20,
         supportDelta: { 'ALL': 2 },
-        message: 'The viral hashtag greatly boosted your movement\'s clout and gave a small bump to support everywhere.'
+        message: 'The viral hashtag greatly boosted your movement\'s clout and gave a small bump to support everywhere.',
+        rewardTier: 'high',
+        tone: 'positive'
       }
     };
   }
@@ -67,7 +69,9 @@ export function generateEvent(state: GameState): GameEvent {
         outcome: {
           supportDelta: { 'ALL': 2 },  // boost support broadly among free-speech advocates
           riskDelta: 5,
-          message: 'Your bold stance rallies free-speech supporters nationwide, but also draws increased scrutiny.'
+          message: 'Your bold stance rallies free-speech supporters nationwide, but also draws increased scrutiny.',
+          rewardTier: 'high',
+          tone: 'risky'
         }
       },
       {
@@ -76,14 +80,18 @@ export function generateEvent(state: GameState): GameEvent {
           cloutDelta: 10,
           supportDelta: { 'ALL': 1 },
           riskDelta: 2,
-          message: 'Your memes turn the incident into a viral joke, boosting clout with minimal fallout.'
+          message: 'Your memes turn the incident into a viral joke, boosting clout with minimal fallout.',
+          rewardTier: 'high',
+          tone: 'positive'
         }
       },
       {
         text: 'Stay out of the controversy',
         outcome: {
           riskDelta: -5,
-          message: 'You decide to stay out of it, avoiding controversy and reducing risk, but missing a chance to gain support.'
+          message: 'You decide to stay out of it, avoiding controversy and reducing risk, but missing a chance to gain support.',
+          rewardTier: 'low',
+          tone: 'neutral'
         }
       }
     ]

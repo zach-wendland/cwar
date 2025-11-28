@@ -11,12 +11,17 @@ export interface Advisor {
   quotes: string[];
 }
 
+export type RewardTier = 'low' | 'medium' | 'high';
+export type OutcomeTone = 'positive' | 'risky' | 'neutral';
+
 export interface EventOutcome {
   supportDelta?: { [state: string]: number };
   cloutDelta?: number;
   fundsDelta?: number;
   riskDelta?: number;
   message?: string;
+  rewardTier?: RewardTier;
+  tone?: OutcomeTone;
   // (Flags like victory or ban triggers could be added here if needed)
 }
 
@@ -50,6 +55,8 @@ export interface GameState {
   pendingEvent?: GameEvent;
   victory: boolean;
   gameOver: boolean;
+  activeBuffs: ActiveBuff[];
+  resolutionMeta?: ResolutionMetadata;
 }
 
 // Actions for the reducer
@@ -57,6 +64,27 @@ type GameAction =
   | { type: 'PERFORM_ACTION'; actionId: string }
   | { type: 'RESOLVE_EVENT'; optionIndex: number }
   | { type: 'RESET_GAME' };
+
+export interface ActiveBuff {
+  id: string;
+  label: string;
+  type: 'cloutMultiplier' | 'riskShield';
+  magnitude: number;
+  expiresTurn: number;
+  source: string;
+}
+
+export interface ResolutionMetadata {
+  eventTitle: string;
+  optionText?: string;
+  rewardTier: RewardTier;
+  tone: OutcomeTone;
+  message?: string;
+  appliedBuff?: ActiveBuff;
+  cloutDelta?: number;
+  riskDelta?: number;
+  turn: number;
+}
 
 // Helper to create a fresh initial state (with default values or random seeds)
 function createInitialState(): GameState {
@@ -80,7 +108,107 @@ function createInitialState(): GameState {
     socialFeed: [],
     pendingEvent: undefined,
     victory: false,
-    gameOver: false
+    gameOver: false,
+    activeBuffs: [],
+    resolutionMeta: undefined
+  };
+}
+
+function pruneExpiredBuffs(buffs: ActiveBuff[], currentTurn: number) {
+  return (buffs || []).filter(buff => buff.expiresTurn > currentTurn);
+}
+
+function applyBuffModifiers(outcome: EventOutcome, buffs: ActiveBuff[]) {
+  let cloutDelta = outcome.cloutDelta || 0;
+  let riskDelta = outcome.riskDelta || 0;
+  buffs.forEach(buff => {
+    if (buff.type === 'cloutMultiplier' && cloutDelta > 0) {
+      cloutDelta = Math.round(cloutDelta * buff.magnitude);
+    }
+    if (buff.type === 'riskShield' && riskDelta > 0) {
+      const reduction = Math.max(0, Math.min(1, buff.magnitude));
+      riskDelta = Math.max(0, Math.round(riskDelta * (1 - reduction)));
+    }
+  });
+  return { cloutDelta, riskDelta };
+}
+
+function applyOutcomeDeltas(
+  support: { [state: string]: number },
+  clout: number,
+  funds: number,
+  risk: number,
+  outcome: EventOutcome,
+  buffs: ActiveBuff[]
+) {
+  const supportClone = { ...support };
+  if (outcome.supportDelta) {
+    for (const s in outcome.supportDelta) {
+      if (s === 'ALL') {
+        for (const code in supportClone) {
+          supportClone[code] = Math.max(0, Math.min(100, supportClone[code] + (outcome.supportDelta[s] || 0)));
+        }
+      } else if (supportClone[s] !== undefined) {
+        supportClone[s] = Math.max(0, Math.min(100, supportClone[s] + outcome.supportDelta[s]));
+      }
+    }
+  }
+
+  const { cloutDelta, riskDelta } = applyBuffModifiers(outcome, buffs);
+  const cloutVal = Math.max(0, clout + cloutDelta);
+  const fundsVal = Math.max(0, funds + (outcome.fundsDelta || 0));
+  const riskVal = Math.max(0, risk + riskDelta);
+
+  return {
+    support: supportClone,
+    clout: cloutVal,
+    funds: fundsVal,
+    risk: riskVal,
+    deltas: { cloutDelta, riskDelta }
+  };
+}
+
+function buildBuffForOutcome(outcome: EventOutcome, currentTurn: number, source: string): ActiveBuff | undefined {
+  if (outcome.rewardTier !== 'high') return undefined;
+  const baseTurn = currentTurn + 2;
+  if (outcome.tone === 'risky') {
+    return {
+      id: `buff-${source}-${currentTurn}-risk`,
+      label: 'Damage Control',
+      type: 'riskShield',
+      magnitude: 0.4,
+      expiresTurn: baseTurn,
+      source
+    };
+  }
+  return {
+    id: `buff-${source}-${currentTurn}-clout`,
+    label: 'Hype Wave',
+    type: 'cloutMultiplier',
+    magnitude: 1.5,
+    expiresTurn: baseTurn,
+    source
+  };
+}
+
+function buildResolutionMeta(
+  eventTitle: string,
+  optionText: string | undefined,
+  outcome: EventOutcome,
+  buff: ActiveBuff | undefined,
+  deltas: { cloutDelta?: number; riskDelta?: number },
+  turn: number
+): ResolutionMetadata {
+  return {
+    eventTitle,
+    optionText,
+    rewardTier: outcome.rewardTier || 'medium',
+    tone: outcome.tone || 'neutral',
+    message: outcome.message,
+    appliedBuff: buff,
+    cloutDelta: deltas.cloutDelta,
+    riskDelta: deltas.riskDelta,
+    turn
   };
 }
 
@@ -113,25 +241,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (config.cost.clout) newClout -= config.cost.clout;
       }
 
+      const activeBuffs = pruneExpiredBuffs(state.activeBuffs, state.turn);
       // Execute the action's effect to get outcome deltas
       const outcome: EventOutcome = config.perform(state);
-      // Apply outcome to state (without mutating original)
-      const newSupport = { ...state.support };
-      if (outcome.supportDelta) {
-        for (const s in outcome.supportDelta) {
-          if (s === 'ALL') {
-            // Apply support change to all states
-            for (const code in newSupport) {
-              newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
-            }
-          } else if (newSupport[s] !== undefined) {
-            newSupport[s] = Math.max(0, Math.min(100, newSupport[s] + outcome.supportDelta[s]));
-          }
-        }
-      }
-      const newCloutVal = Math.max(0, newClout + (outcome.cloutDelta || 0));
-      const newFundsVal = Math.max(0, newFunds + (outcome.fundsDelta || 0));
-      const newRiskVal = Math.max(0, state.risk + (outcome.riskDelta || 0));
+      const actionResult = applyOutcomeDeltas(state.support, newClout, newFunds, state.risk, outcome, activeBuffs);
+      const newSupport = actionResult.support;
+      const newCloutVal = actionResult.clout;
+      const newFundsVal = actionResult.funds;
+      const newRiskVal = actionResult.risk;
       const newNewsLog = [...state.newsLog];
       if (outcome.message) {
         newNewsLog.push(outcome.message);
@@ -152,7 +269,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         pendingEvent: state.pendingEvent,   // (should be undefined here)
         victory: false,
         gameOver: false,
-        advisors: state.advisors
+        advisors: state.advisors,
+        activeBuffs,
+        resolutionMeta: state.resolutionMeta
       };
 
       // Generate social media reactions to this action
@@ -175,20 +294,30 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         } else {
           // Got a narrative event (no choices) – apply its outcome immediately
           if (event.outcome) {
-            if (event.outcome.supportDelta) {
-              for (const s in event.outcome.supportDelta) {
-                if (s === 'ALL') {
-                  for (const code in newState.support) {
-                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (event.outcome.supportDelta[s] || 0)));
-                  }
-                } else if (newState.support[s] !== undefined) {
-                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + event.outcome.supportDelta[s]));
-                }
-              }
+            const narrativeResult = applyOutcomeDeltas(
+              newState.support,
+              newState.clout,
+              newState.funds,
+              newState.risk,
+              event.outcome,
+              newState.activeBuffs
+            );
+            newState.support = narrativeResult.support;
+            newState.clout = narrativeResult.clout;
+            newState.funds = narrativeResult.funds;
+            newState.risk = narrativeResult.risk;
+            const buff = buildBuffForOutcome(event.outcome, newTurn, event.title);
+            if (buff) {
+              newState.activeBuffs = [...newState.activeBuffs, buff];
             }
-            if (event.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + event.outcome.cloutDelta);
-            if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
-            if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
+            newState.resolutionMeta = buildResolutionMeta(
+              event.title,
+              undefined,
+              event.outcome,
+              buff,
+              narrativeResult.deltas,
+              newTurn
+            );
           }
           // Log the narrative event
           newState.newsLog.push(`${event.title}: ${event.description}`);
@@ -218,22 +347,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, pendingEvent: undefined };
       }
       const outcome = choice.outcome;
-      // Apply outcome effects of the chosen option
-      const newSupport = { ...state.support };
-      if (outcome.supportDelta) {
-        for (const s in outcome.supportDelta) {
-          if (s === 'ALL') {
-            for (const code in newSupport) {
-              newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
-            }
-          } else if (newSupport[s] !== undefined) {
-            newSupport[s] = Math.max(0, Math.min(100, newSupport[s] + outcome.supportDelta[s]));
-          }
-        }
-      }
-      const newCloutVal = Math.max(0, state.clout + (outcome.cloutDelta || 0));
-      const newFundsVal = Math.max(0, state.funds + (outcome.fundsDelta || 0));
-      const newRiskVal = Math.max(0, state.risk + (outcome.riskDelta || 0));
+      const activeBuffs = pruneExpiredBuffs(state.activeBuffs, state.turn);
+      const resolutionResult = applyOutcomeDeltas(
+        state.support,
+        state.clout,
+        state.funds,
+        state.risk,
+        outcome,
+        activeBuffs
+      );
+      const newSupport = resolutionResult.support;
+      const newCloutVal = resolutionResult.clout;
+      const newFundsVal = resolutionResult.funds;
+      const newRiskVal = resolutionResult.risk;
       const newNewsLog = [...state.newsLog];
       // Log the event resolution and outcome
       newNewsLog.push(`Event resolved: ${event.title} - Chose "${choice.text}"`);
@@ -253,8 +379,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gameOver: false,
         turn: state.turn,  // turn does not advance on resolution, it was advanced on the action already
         socialFeed: [...state.socialFeed],
-        advisors: state.advisors
+        advisors: state.advisors,
+        activeBuffs,
+        resolutionMeta: state.resolutionMeta
       };
+
+      const buff = buildBuffForOutcome(outcome, state.turn, event.title);
+      if (buff) {
+        newState.activeBuffs = [...newState.activeBuffs, buff];
+      }
+      newState.resolutionMeta = buildResolutionMeta(
+        event.title,
+        choice.text,
+        outcome,
+        buff,
+        resolutionResult.deltas,
+        state.turn
+      );
 
       // Re-check victory/defeat after event outcome
       const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
@@ -290,7 +431,15 @@ const GameContext = createContext<GameContextProps | undefined>(undefined);
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load saved game state from localStorage if available, otherwise use default
   const savedState = localStorage.getItem('gameSave');
-  const initialState = savedState ? (JSON.parse(savedState) as GameState) : createInitialState();
+  const parsedState = savedState ? (JSON.parse(savedState) as Partial<GameState>) : undefined;
+  const initialState = parsedState
+    ? {
+        ...createInitialState(),
+        ...parsedState,
+        activeBuffs: parsedState.activeBuffs || [],
+        resolutionMeta: parsedState.resolutionMeta
+      }
+    : createInitialState();
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
   // Persist game state to localStorage on every change

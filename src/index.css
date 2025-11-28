@@ -30,3 +30,102 @@ path.state:hover {
   max-width: 500px;
   width: 90%;
 }
+
+.resolution-overlay {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1100;
+  pointer-events: none;
+}
+
+.resolution-toast {
+  background: linear-gradient(135deg, #1f1f2e, #2b2c3f);
+  color: #fff;
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateX(220px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  border: 2px solid #54546e;
+  pointer-events: auto;
+  min-width: 260px;
+}
+
+.resolution-toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.resolution-toast.positive {
+  border-color: #57cc99;
+  box-shadow: 0 10px 30px rgba(87, 204, 153, 0.35);
+}
+
+.resolution-toast.risky {
+  border-color: #ff6b6b;
+  box-shadow: 0 10px 30px rgba(255, 107, 107, 0.35);
+}
+
+.resolution-toast.neutral {
+  border-color: #9a8c98;
+}
+
+.tone-pill {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+}
+
+.stat-chip,
+.buff-chip {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-right: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.buff-chip {
+  background: linear-gradient(120deg, #3a86ff, #8338ec);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(131, 56, 236, 0.3);
+}
+
+.confetti-wrapper {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1090;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  font-size: 0.8rem;
+  animation: confetti-fall 2.8s ease-out forwards;
+}
+
+.confetti-piece.seed-0 { left: 20%; animation-duration: 2.4s; }
+.confetti-piece.seed-1 { left: 40%; animation-duration: 2.7s; }
+.confetti-piece.seed-2 { left: 60%; animation-duration: 2.6s; }
+.confetti-piece.seed-3 { left: 80%; animation-duration: 2.9s; }
+.confetti-piece.seed-4 { left: 30%; animation-duration: 2.3s; }
+
+.confetti-piece.tone-positive { color: #63f2c8; }
+.confetti-piece.tone-risky { color: #ff8fa3; }
+.confetti-piece.tone-neutral { color: #b8c0ff; }
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  60% { opacity: 1; }
+  100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+}

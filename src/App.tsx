@@ -5,6 +5,7 @@ import MapView from './components/MapView';
 import EventFeed from './components/EventFeed';
 import ActionPanel from './components/ActionPanel';
 import AdvisorsPanel from './components/AdvisorsPanel';
+import EventResolutionOverlays from './components/EventResolutionOverlays';
 
 const App: React.FC = () => {
   const { state, dispatch } = useGameContext();
@@ -65,6 +66,8 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+
+      <EventResolutionOverlays />
     </div>
   );
 };
