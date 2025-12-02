@@ -1,0 +1,240 @@
+/* TutorialOverlay.css - Styles for the tutorial system */
+
+.tutorial-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.tutorial-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+.tutorial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.tutorial-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.tutorial-icon {
+  font-size: 1.5rem;
+}
+
+.tutorial-progress {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.tutorial-skip-btn {
+  font-size: 0.875rem;
+}
+
+.tutorial-progress-bar {
+  height: 4px;
+  background: #e9ecef;
+  position: relative;
+}
+
+.tutorial-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0d6efd, #0a58ca);
+  transition: width 0.3s ease-out;
+}
+
+.tutorial-content {
+  padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tutorial-content h3 {
+  color: #212529;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.tutorial-description {
+  color: #495057;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+}
+
+.tutorial-objective {
+  background: #e7f3ff;
+  border-left: 4px solid #0d6efd;
+  padding: 1rem;
+  border-radius: 4px;
+  color: #084298;
+}
+
+.tutorial-objective strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #052c65;
+}
+
+.tutorial-footer {
+  padding: 1.5rem;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tutorial-hint {
+  flex: 1;
+}
+
+.tutorial-next-btn {
+  min-width: 100px;
+}
+
+.tutorial-next-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Highlight overlays for specific UI elements */
+.tutorial-highlight {
+  position: fixed;
+  border: 3px solid #ffc107;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 193, 7, 0.6);
+  z-index: 999;
+  pointer-events: none;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.tutorial-highlight-map {
+  /* Adjust these coordinates based on your layout */
+  top: 80px;
+  left: 20px;
+  right: 66%;
+  bottom: 20px;
+}
+
+.tutorial-highlight-stats {
+  top: 80px;
+  left: 34%;
+  right: 34%;
+  height: 300px;
+}
+
+.tutorial-highlight-actions {
+  top: 80px;
+  right: 20px;
+  left: 68%;
+  height: 400px;
+}
+
+.tutorial-highlight-advisors {
+  top: 500px;
+  right: 20px;
+  left: 68%;
+  bottom: 20px;
+}
+
+.tutorial-highlight-regions {
+  top: 80px;
+  left: 34%;
+  right: 34%;
+  height: 300px;
+}
+
+.tutorial-highlight-achievements {
+  top: 80px;
+  left: 34%;
+  right: 34%;
+  height: 300px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 193, 7, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 193, 7, 0.8);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .tutorial-panel {
+    width: 95%;
+    max-height: 85vh;
+  }
+
+  .tutorial-content {
+    padding: 1.5rem;
+  }
+
+  .tutorial-header,
+  .tutorial-footer {
+    padding: 1rem;
+  }
+
+  .tutorial-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .tutorial-description {
+    font-size: 0.9rem;
+  }
+
+  .tutorial-highlight {
+    display: none; /* Hide highlights on mobile for simplicity */
+  }
+}

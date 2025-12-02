@@ -101,6 +101,23 @@ export interface NarrativeArc {
   completed: boolean;
 }
 
+export interface TutorialStage {
+  id: string;
+  title: string;
+  description: string;
+  objective: string;
+  highlight?: string;  // UI element to highlight
+  completed: boolean;
+}
+
+export interface TutorialState {
+  active: boolean;
+  currentStage: number;
+  stages: TutorialStage[];
+  skipped: boolean;
+  completedAt?: number;  // turn number when completed
+}
+
 // Main game state structure
 export interface GameState {
   turn: number;
@@ -122,6 +139,7 @@ export interface GameState {
   opposition: Opposition[];
   activeNarratives: NarrativeArc[];
   difficulty: 'easy' | 'normal' | 'hard';
+  tutorial: TutorialState;
 }
 
 // Actions for the reducer
@@ -133,7 +151,10 @@ type GameAction =
   | { type: 'FIRE_ADVISOR'; advisorId: string }
   | { type: 'USE_ADVISOR_ABILITY'; advisorId: string }
   | { type: 'ACTIVATE_PERK'; perkId: string }
-  | { type: 'DEACTIVATE_PERK'; perkId: string };
+  | { type: 'DEACTIVATE_PERK'; perkId: string }
+  | { type: 'SKIP_TUTORIAL' }
+  | { type: 'COMPLETE_TUTORIAL_STAGE'; stageId: string }
+  | { type: 'NEXT_TUTORIAL_STAGE' };
 
 // Helper functions to initialize game elements
 function createRegions(): Region[] {
@@ -216,6 +237,107 @@ function createOpposition(): Opposition[] {
   ];
 }
 
+function createTutorial(): TutorialState {
+  return {
+    active: true,
+    currentStage: 0,
+    skipped: false,
+    stages: [
+      {
+        id: 'welcome',
+        title: 'Welcome to Culture War Tycoon',
+        description: 'Welcome, Commander! You\'ve been chosen to lead a grassroots movement that will shape the cultural landscape. Your mission: build support across all 50 states while managing resources and avoiding platform bans.',
+        objective: 'Click "Next" to begin your briefing',
+        completed: false
+      },
+      {
+        id: 'ui_overview',
+        title: 'Command Center Overview',
+        description: 'This is your command center. The map shows your support levels across states (darker colors = higher support). The center panel displays your resources and news. The right panel shows available actions and your advisory team.',
+        objective: 'Familiarize yourself with the interface',
+        highlight: 'map',
+        completed: false
+      },
+      {
+        id: 'resources',
+        title: 'Understanding Resources',
+        description: 'You manage four key resources: CLOUT (social media influence), FUNDS (campaign money), MOMENTUM (effectiveness multiplier), and RISK (exposure level). Keep Risk below 100 or face platform bans!',
+        objective: 'Review your current resource levels',
+        highlight: 'stats',
+        completed: false
+      },
+      {
+        id: 'first_action',
+        title: 'Take Your First Action',
+        description: 'Actions are how you spread your movement. Each action costs resources and has different effects. Try "Launch Meme Campaign" - it costs Clout but boosts support in multiple states.',
+        objective: 'Perform the "Launch Meme Campaign" action',
+        highlight: 'actions',
+        completed: false
+      },
+      {
+        id: 'advisors',
+        title: 'Your Advisory Team',
+        description: 'Advisors provide passive bonuses and special abilities. Each has Loyalty (affects bonus strength) and Morale (required for abilities). Keep them happy for maximum effectiveness!',
+        objective: 'Review your advisors and their bonuses',
+        highlight: 'advisors',
+        completed: false
+      },
+      {
+        id: 'advisor_abilities',
+        title: 'Advisor Abilities',
+        description: 'Each advisor has a unique ability on cooldown. Try using Mike MemeLord\'s "Viral Boost" ability for a powerful campaign boost! Abilities require 50+ Morale to use.',
+        objective: 'Use an advisor ability',
+        highlight: 'advisors',
+        completed: false
+      },
+      {
+        id: 'events',
+        title: 'Handling Events',
+        description: 'Random events will present strategic choices. Each option has different outcomes affecting your resources and support. Choose wisely - some decisions have long-term consequences!',
+        objective: 'Wait for an event and make a choice',
+        completed: false
+      },
+      {
+        id: 'regional_strategy',
+        title: 'Regional Strategy',
+        description: 'States are grouped into regions (Northeast, Southeast, Midwest, etc.). Check regional influence in the stats panel. Some actions target specific regions for concentrated impact.',
+        objective: 'View regional influence data',
+        highlight: 'regions',
+        completed: false
+      },
+      {
+        id: 'achievements',
+        title: 'Achievements & Progression',
+        description: 'Unlock achievements by reaching milestones (high clout, regional dominance, etc.). Future updates will add perks tied to achievements. Track your progress in the stats panel.',
+        objective: 'Check available achievements',
+        highlight: 'achievements',
+        completed: false
+      },
+      {
+        id: 'opposition',
+        title: 'Understanding Opposition',
+        description: 'Opposition factions work against you every turn, reducing support in key states. Use "Gather Opposition Intel" action to counter their strategies and protect your gains.',
+        objective: 'Review opposition faction information',
+        completed: false
+      },
+      {
+        id: 'victory_conditions',
+        title: 'Victory & Defeat',
+        description: 'WIN by reaching 80% average support across all states. LOSE if Risk hits 100% (platform ban). Balance aggressive expansion with risk management!',
+        objective: 'Understand win/loss conditions',
+        completed: false
+      },
+      {
+        id: 'complete',
+        title: 'Tutorial Complete!',
+        description: 'You\'re ready to lead your movement to victory! Remember: balance resources, keep advisors loyal, manage risk, and respond strategically to events. Good luck, Commander!',
+        objective: 'Bonus: +50 Clout, +100 Funds for completing tutorial',
+        completed: false
+      }
+    ]
+  };
+}
+
 // Helper to create a fresh initial state (with default values or random seeds)
 function createInitialState(): GameState {
   // Initialize support for all 50 states + DC
@@ -250,7 +372,8 @@ function createInitialState(): GameState {
     regions: createRegions(),
     opposition: createOpposition(),
     activeNarratives: [],
-    difficulty: 'normal'
+    difficulty: 'normal',
+    tutorial: createTutorial()
   };
 }
 
@@ -696,6 +819,76 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         activePerks: state.activePerks.filter(p => p.id !== action.perkId),
         newsLog: [...state.newsLog, `Deactivated perk`]
+      };
+    }
+
+    case 'SKIP_TUTORIAL': {
+      return {
+        ...state,
+        tutorial: {
+          ...state.tutorial,
+          active: false,
+          skipped: true
+        }
+      };
+    }
+
+    case 'NEXT_TUTORIAL_STAGE': {
+      if (!state.tutorial.active || state.tutorial.currentStage >= state.tutorial.stages.length - 1) {
+        return state;
+      }
+
+      const currentStage = state.tutorial.stages[state.tutorial.currentStage];
+      const updatedStages = state.tutorial.stages.map((stage, idx) =>
+        idx === state.tutorial.currentStage ? { ...stage, completed: true } : stage
+      );
+
+      const nextStageIndex = state.tutorial.currentStage + 1;
+      const isLastStage = nextStageIndex === state.tutorial.stages.length - 1;
+
+      // If completing the tutorial, give bonus resources
+      if (isLastStage) {
+        return {
+          ...state,
+          clout: state.clout + 50,
+          funds: state.funds + 100,
+          tutorial: {
+            ...state.tutorial,
+            currentStage: nextStageIndex,
+            stages: updatedStages,
+            active: true,
+            completedAt: state.turn
+          },
+          newsLog: [...state.newsLog, 'Tutorial completed! Received +50 Clout, +100 Funds']
+        };
+      }
+
+      return {
+        ...state,
+        tutorial: {
+          ...state.tutorial,
+          currentStage: nextStageIndex,
+          stages: updatedStages
+        }
+      };
+    }
+
+    case 'COMPLETE_TUTORIAL_STAGE': {
+      const stageIndex = state.tutorial.stages.findIndex(s => s.id === action.stageId);
+      if (stageIndex === -1 || stageIndex !== state.tutorial.currentStage) {
+        return state;
+      }
+
+      const updatedStages = state.tutorial.stages.map((stage, idx) =>
+        idx === stageIndex ? { ...stage, completed: true } : stage
+      );
+
+      return {
+        ...state,
+        tutorial: {
+          ...state.tutorial,
+          stages: updatedStages
+        }
       };
     }
 

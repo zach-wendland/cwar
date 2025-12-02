@@ -6,6 +6,7 @@ import EventFeed from './components/EventFeed';
 import ActionPanel from './components/ActionPanel';
 import AdvisorsPanel from './components/AdvisorsPanel';
 import IntroTutorial from './components/IntroTutorial';
+import TutorialOverlay from './components/TutorialOverlay';
 
 const App: React.FC = () => {
   const { state, dispatch } = useGameContext();
@@ -21,6 +22,7 @@ const App: React.FC = () => {
 
   return (
     <div className="container-fluid py-3">
+      <TutorialOverlay />
       <IntroTutorial />
       <div className="row">
         {/* Left column: Map view */}
