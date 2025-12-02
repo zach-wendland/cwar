@@ -17,19 +17,37 @@ const createMockState = (overrides?: Partial<GameState>): GameState => {
     clout: 50,
     funds: 100,
     risk: 0,
+    momentum: 50,
     advisors: [],
+    availableAdvisors: [],
     newsLog: [],
     socialFeed: [],
     victory: false,
     gameOver: false,
+    achievements: [],
+    activePerks: [],
+    regions: [
+      { id: 'northeast', name: 'Northeast', states: ['CT', 'ME', 'MA', 'NH', 'RI', 'VT', 'NJ', 'NY', 'PA'], influence: 0 },
+      { id: 'southeast', name: 'Southeast', states: ['DE', 'FL', 'GA', 'MD', 'NC', 'SC', 'VA', 'WV', 'KY', 'TN', 'AL', 'MS', 'AR', 'LA'], influence: 0 },
+      { id: 'midwest', name: 'Midwest', states: ['IL', 'IN', 'MI', 'OH', 'WI', 'IA', 'KS', 'MN', 'MO', 'NE', 'ND', 'SD'], influence: 0 },
+      { id: 'southwest', name: 'Southwest', states: ['AZ', 'NM', 'OK', 'TX'], influence: 0 },
+      { id: 'west', name: 'West', states: ['CO', 'ID', 'MT', 'NV', 'UT', 'WY', 'AK', 'CA', 'HI', 'OR', 'WA'], influence: 0 },
+      { id: 'capital', name: 'Capital', states: ['DC'], influence: 0 }
+    ],
+    opposition: [
+      { name: 'The Establishment', strength: 20, focus: ['NY', 'CA', 'DC'], strategy: 'defensive' },
+      { name: 'Counter-Movement', strength: 15, focus: [], strategy: 'balanced' }
+    ],
+    activeNarratives: [],
+    difficulty: 'normal',
     ...overrides
   };
 };
 
 describe('Actions', () => {
   describe('actionsConfig', () => {
-    it('should have 4 actions defined', () => {
-      expect(actionsConfig).toHaveLength(4);
+    it('should have 11 actions defined', () => {
+      expect(actionsConfig).toHaveLength(11);
     });
 
     it('should have all required action properties', () => {
