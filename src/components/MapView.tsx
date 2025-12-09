@@ -1,6 +1,6 @@
 // MapView.tsx - component for the U.S. map visualization of state support
-import React, { useState, useEffect } from 'react';
-import USAMap from 'react-usa-map';  // USA map component (SVG map)
+import React, { useState } from 'react';
+import { USAMap, USAStateAbbreviation } from '@mirawision/usa-map-react';
 import { useGameContext } from '../game/GameContext';
 
 // Utility function to determine fill color based on support %
@@ -15,48 +15,30 @@ const MapView: React.FC = () => {
   const { state } = useGameContext();
   const [hoveredState, setHoveredState] = useState<string | null>(null);
 
-  // Custom configuration for state fills (color by support level)
-  const statesCustomConfig = () => {
-    const config: { [stateCode: string]: { fill: string } } = {};
-    for (const code in state.support) {
-      config[code] = { fill: getStateColor(state.support[code]) };
-    }
-    return config;
-  };
+  // Build custom states configuration for the map
+  const customStates: Record<string, {
+    fill: string;
+    onClick?: () => void;
+    onHover?: () => void;
+    onLeave?: () => void;
+  }> = {};
 
-  // Attach hover event handlers to state elements (since library lacks onMouseEnter prop)
-  useEffect(() => {
-    const handleMouseEnter = (e: any) => {
-      const stateCode = e.target.getAttribute('data-name');
-      if (stateCode) setHoveredState(stateCode);
+  for (const code in state.support) {
+    customStates[code] = {
+      fill: getStateColor(state.support[code]),
+      onClick: () => {
+        console.log('Clicked on state:', code);
+        // (In a future update, clicking could select a target state for certain actions)
+      },
+      onHover: () => setHoveredState(code),
+      onLeave: () => setHoveredState(null),
     };
-    const handleMouseLeave = () => setHoveredState(null);
-    // Select all state <path> elements by class and add event listeners
-    const svgStates = document.querySelectorAll('svg .state');
-    svgStates.forEach(el => {
-      el.addEventListener('mouseenter', handleMouseEnter);
-      el.addEventListener('mouseleave', handleMouseLeave);
-    });
-    // Cleanup on unmount
-    return () => {
-      svgStates.forEach(el => {
-        el.removeEventListener('mouseenter', handleMouseEnter);
-        el.removeEventListener('mouseleave', handleMouseLeave);
-      });
-    };
-  }, [state.turn]);  // re-run if the map re-renders on state change
-
-  // Handle state click (for future features like targeting a region)
-  const mapHandler = (event: any) => {
-    const stateCode = event.target.dataset.name;
-    console.log('Clicked on state:', stateCode);
-    // (In a future update, clicking could select a target state for certain actions)
-  };
+  }
 
   return (
     <div>
       {/* Render the interactive US map with custom fills per state */}
-      <USAMap customize={statesCustomConfig()} onClick={mapHandler} />
+      <USAMap customStates={customStates} />
       {/* If a state is hovered, display its support percentage */}
       {hoveredState && (
         <div className="mt-2 text-center">

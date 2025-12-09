@@ -3,26 +3,29 @@ import '@testing-library/jest-dom';
 import MapView from '../MapView';
 import { GameProvider } from '../../game/GameContext';
 
-// Mock the react-usa-map component since it's an SVG component
-jest.mock('react-usa-map', () => {
-  return function MockUSAMap({ customize, onClick }: any) {
+// Mock the @mirawision/usa-map-react component
+jest.mock('@mirawision/usa-map-react', () => ({
+  USAMap: function MockUSAMap({ customStates }: any) {
     return (
       <div data-testid="usa-map">
         <svg>
-          {Object.keys(customize()).map((stateCode: string) => (
+          {Object.keys(customStates).map((stateCode: string) => (
             <path
               key={stateCode}
               className="state"
               data-name={stateCode}
-              fill={customize()[stateCode].fill}
-              onClick={onClick}
+              fill={customStates[stateCode].fill}
+              onClick={customStates[stateCode].onClick}
+              onMouseEnter={customStates[stateCode].onHover}
+              onMouseLeave={customStates[stateCode].onLeave}
             />
           ))}
         </svg>
       </div>
     );
-  };
-});
+  },
+  USAStateAbbreviation: {}
+}));
 
 describe('MapView', () => {
   const renderWithProvider = () => {
