@@ -1,7 +1,10 @@
-// ActionPanel.tsx - lists available actions for the player to perform
 import React from 'react';
+import { motion } from 'framer-motion';
+import { Swords } from 'lucide-react';
 import { useGameContext } from '../game/GameContext';
 import { actionsConfig } from '../game/actions';
+import GlassPanel from './modern/GlassPanel';
+import ActionCard from './modern/ActionCard';
 
 const ActionPanel: React.FC = () => {
   const { state, dispatch } = useGameContext();
@@ -11,40 +14,38 @@ const ActionPanel: React.FC = () => {
   };
 
   return (
-    <div>
-      <h5>Actions</h5>
-      {actionsConfig.map(action => {
-        // Determine if the action button should be disabled (lack resources, pending event, or game ended)
-        let disabled = false;
-        if (action.cost) {
-          if (action.cost.funds && state.funds < action.cost.funds) disabled = true;
-          if (action.cost.clout && state.clout < action.cost.clout) disabled = true;
-        }
-        if (state.pendingEvent || state.victory || state.gameOver) {
-          disabled = true;
-        }
-        return (
-          <button
-            key={action.id}
-            className="btn btn-primary btn-sm d-block w-100 text-start mb-2"
-            onClick={() => handleActionClick(action.id)}
-            disabled={disabled}
-          >
-            <strong>{action.name}</strong> – {action.description}
-            {/* Show cost in parentheses if any */}
-            {action.cost && (action.cost.funds || action.cost.clout) && (
-              <span className="text-light small">
-                {" "}(
-                {action.cost.funds ? `$${action.cost.funds} funds` : ""}
-                {action.cost.funds && action.cost.clout ? ", " : ""}
-                {action.cost.clout ? `${action.cost.clout} clout` : ""}
-                )
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <GlassPanel title="Actions" icon={Swords} className="mb-4" glowColor="cyan">
+      <div className="actions-grid">
+        {actionsConfig.map((action, idx) => {
+          let disabled = false;
+          if (action.cost) {
+            if (action.cost.funds && state.funds < action.cost.funds) disabled = true;
+            if (action.cost.clout && state.clout < action.cost.clout) disabled = true;
+          }
+          if (state.pendingEvent || state.victory || state.gameOver) {
+            disabled = true;
+          }
+
+          return (
+            <motion.div
+              key={action.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+            >
+              <ActionCard
+                id={action.id}
+                name={action.name}
+                description={action.description}
+                cost={action.cost}
+                disabled={disabled}
+                onClick={() => handleActionClick(action.id)}
+              />
+            </motion.div>
+          );
+        })}
+      </div>
+    </GlassPanel>
   );
 };
 

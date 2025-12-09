@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "lastUpdated": "2025-01-01T00:00:00.000Z",
+  "items": [
+    {
+      "id": "static-1",
+      "headline": "Social Media Algorithm Changes Spark National Debate",
+      "summary": "Major platforms announce new content moderation policies affecting political discourse across the nation.",
+      "category": "tech",
+      "sentiment": "neutral",
+      "virality": 65
+    },
+    {
+      "id": "static-2",
+      "headline": "Viral Trend Sweeps Nation: #MovementRising",
+      "summary": "Grassroots digital campaign gains unexpected mainstream attention and media coverage.",
+      "category": "culture",
+      "sentiment": "positive",
+      "virality": 85
+    },
+    {
+      "id": "static-3",
+      "headline": "Economic Uncertainty Fuels Political Tensions",
+      "summary": "Markets react to policy debates as citizens seek answers about the future.",
+      "category": "economy",
+      "sentiment": "negative",
+      "virality": 70
+    },
+    {
+      "id": "static-4",
+      "headline": "Influencer Coalition Forms Around New Cause",
+      "summary": "Major content creators unite to amplify emerging movement across platforms.",
+      "category": "culture",
+      "sentiment": "positive",
+      "virality": 78
+    },
+    {
+      "id": "static-5",
+      "headline": "Leaked Documents Reveal Platform Bias Claims",
+      "summary": "Internal communications suggest algorithmic manipulation of trending topics.",
+      "category": "tech",
+      "sentiment": "negative",
+      "virality": 90
+    },
+    {
+      "id": "static-6",
+      "headline": "Political Fundraising Reaches Record Levels",
+      "summary": "Small-dollar donations surge as grassroots movements gain momentum online.",
+      "category": "politics",
+      "sentiment": "positive",
+      "virality": 72
+    },
+    {
+      "id": "static-7",
+      "headline": "Celebrity Endorsement Divides Fan Base",
+      "summary": "A-list entertainer's political stance sparks heated debate on social media.",
+      "category": "culture",
+      "sentiment": "neutral",
+      "virality": 88
+    },
+    {
+      "id": "static-8",
+      "headline": "AI-Generated Content Floods Social Platforms",
+      "summary": "Experts warn of synthetic media's impact on public discourse and trust.",
+      "category": "tech",
+      "sentiment": "negative",
+      "virality": 75
+    },
+    {
+      "id": "static-9",
+      "headline": "Youth Voter Registration Hits Historic Highs",
+      "summary": "Gen Z engagement reshapes political landscape ahead of elections.",
+      "category": "politics",
+      "sentiment": "positive",
+      "virality": 82
+    },
+    {
+      "id": "static-10",
+      "headline": "Corporate Sponsors Pull Back From Controversy",
+      "summary": "Major brands navigate political minefield as consumer activism rises.",
+      "category": "economy",
+      "sentiment": "neutral",
+      "virality": 68
+    }
+  ]
+}

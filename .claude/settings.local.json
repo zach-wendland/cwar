@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm view:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm outdated:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nFix Vercel deployment: upgrade to React 18 compatible map library\n\n- Replace react-usa-map (React 16 only) with @mirawision/usa-map-react\n- Update MapView.tsx to use new library API\n- Upgrade testing libraries to latest React 18 compatible versions\n- Fix all test files for new map component mock\n- Update README.md and add CLAUDE.md documentation\n- All 100 tests passing, build compiles successfully\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "WebFetch(domain:cwar-one.vercel.app)",
+      "Bash(curl:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(node:*)",
+      "Bash(npx --yes tailwindcss init:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd modern UI/UX enhancements with dark theme and gamification\n\n- Add Tailwind CSS v4, framer-motion, react-hot-toast, lucide-react\n- Create glassmorphism component system (GlassPanel, StatsBar, RiskMeter)\n- Implement animated ActionCard with hover/click effects\n- Add achievement toast system with milestone notifications\n- Implement gamification mechanics: streaks, critical hits, daily momentum\n- Create content pipeline with NewsAPI integration and static fallback\n- Add dark theme with cyan/purple accent colors\n- Update all components to use modern styling and animations\n- Fix all 99 tests to match new UI structure\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(del nul)"
+    ]
+  }
+}

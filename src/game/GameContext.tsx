@@ -17,7 +17,6 @@ export interface EventOutcome {
   fundsDelta?: number;
   riskDelta?: number;
   message?: string;
-  // (Flags like victory or ban triggers could be added here if needed)
 }
 
 export interface EventOption {
@@ -29,7 +28,7 @@ export interface GameEvent {
   title: string;
   description: string;
   options?: EventOption[];
-  outcome?: EventOutcome;  // used for narrative events with no choices
+  outcome?: EventOutcome;
 }
 
 export interface Tweet {
@@ -37,37 +36,54 @@ export interface Tweet {
   content: string;
 }
 
-// Main game state structure
+// Main game state structure with gamification additions
 export interface GameState {
   turn: number;
-  support: { [stateCode: string]: number };  // support percentage per state
+  support: { [stateCode: string]: number };
   clout: number;
   funds: number;
   risk: number;
   advisors: Advisor[];
-  newsLog: string[];       // log of news events and actions
-  socialFeed: Tweet[];     // list of generated social media posts
+  newsLog: string[];
+  socialFeed: Tweet[];
   pendingEvent?: GameEvent;
   victory: boolean;
   gameOver: boolean;
+  // Gamification features
+  streak: number;
+  highestStreak: number;
+  lastActionWasCritical: boolean;
+  totalCriticalHits: number;
+  sessionFirstAction: boolean;
+  achievementsUnlocked: string[];
 }
 
 // Actions for the reducer
 type GameAction =
   | { type: 'PERFORM_ACTION'; actionId: string }
   | { type: 'RESOLVE_EVENT'; optionIndex: number }
-  | { type: 'RESET_GAME' };
+  | { type: 'RESET_GAME' }
+  | { type: 'CLEAR_CRITICAL_FLAG' };
 
-// Helper to create a fresh initial state (with default values or random seeds)
+// Critical hit chance (10%)
+const CRITICAL_HIT_CHANCE = 0.10;
+
+// Streak bonus thresholds
+const STREAK_BONUSES = {
+  3: { clout: 5, message: '🔥 3-Turn Streak! +5 Clout bonus!' },
+  5: { funds: 20, message: '🔥 5-Turn Streak! +$20 Funds bonus!' },
+  10: { supportBonus: true, message: '🔥 10-Turn Streak! +10% Support to a random state!' },
+};
+
+// Helper to create a fresh initial state
 function createInitialState(): GameState {
-  // Initialize support for all 50 states + DC
   const stateCodes = ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI",
                       "ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN",
                       "MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH",
                       "OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA",
                       "WV","WI","WY"];
   const supportInit: { [state: string]: number } = {};
-  stateCodes.forEach(code => { supportInit[code] = 5; });  // start at 5% support in each state
+  stateCodes.forEach(code => { supportInit[code] = 5; });
 
   return {
     turn: 0,
@@ -75,36 +91,78 @@ function createInitialState(): GameState {
     clout: 50,
     funds: 100,
     risk: 0,
-    advisors: generateAdvisors(),  // generate initial advisor NPCs
+    advisors: generateAdvisors(),
     newsLog: ["Game start: Your movement is born. Spread influence and avoid getting banned!"],
     socialFeed: [],
     pendingEvent: undefined,
     victory: false,
-    gameOver: false
+    gameOver: false,
+    // Gamification
+    streak: 0,
+    highestStreak: 0,
+    lastActionWasCritical: false,
+    totalCriticalHits: 0,
+    sessionFirstAction: true,
+    achievementsUnlocked: [],
   };
 }
 
-// Reducer to handle game state transitions per action/turn
+// Apply outcome with optional critical hit multiplier
+function applyOutcomeWithMultiplier(
+  outcome: EventOutcome,
+  multiplier: number = 1
+): EventOutcome {
+  const result: EventOutcome = { ...outcome };
+
+  if (outcome.supportDelta) {
+    result.supportDelta = {};
+    for (const key in outcome.supportDelta) {
+      const value = outcome.supportDelta[key];
+      // Only multiply positive values (benefits)
+      result.supportDelta[key] = value > 0 ? Math.round(value * multiplier) : value;
+    }
+  }
+
+  if (outcome.cloutDelta && outcome.cloutDelta > 0) {
+    result.cloutDelta = Math.round(outcome.cloutDelta * multiplier);
+  }
+
+  if (outcome.fundsDelta && outcome.fundsDelta > 0) {
+    result.fundsDelta = Math.round(outcome.fundsDelta * multiplier);
+  }
+
+  // Risk is never multiplied (we don't want to punish critical hits)
+
+  return result;
+}
+
+// Get random state code
+function getRandomStateCode(support: { [key: string]: number }): string {
+  const codes = Object.keys(support);
+  return codes[Math.floor(Math.random() * codes.length)];
+}
+
+// Reducer to handle game state transitions
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'PERFORM_ACTION': {
       const config = actionsConfig.find(act => act.id === action.actionId);
       if (!config) return state;
-      // If an interactive event is awaiting resolution, block other actions
+
       if (state.pendingEvent) {
         return state;
       }
-      // Check resource costs for the action
+
+      // Check resource costs
       if (config.cost) {
         if (config.cost.funds && state.funds < config.cost.funds) {
-          // Not enough funds
           return { ...state, newsLog: [...state.newsLog, "Not enough funds for action: " + config.name] };
         }
         if (config.cost.clout && state.clout < config.cost.clout) {
-          // Not enough clout
           return { ...state, newsLog: [...state.newsLog, "Not enough clout to perform action: " + config.name] };
         }
       }
+
       // Deduct costs
       let newFunds = state.funds;
       let newClout = state.clout;
@@ -113,14 +171,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (config.cost.clout) newClout -= config.cost.clout;
       }
 
-      // Execute the action's effect to get outcome deltas
-      const outcome: EventOutcome = config.perform(state);
-      // Apply outcome to state (without mutating original)
+      // Check for critical hit
+      const isCriticalHit = Math.random() < CRITICAL_HIT_CHANCE;
+      const multiplier = isCriticalHit ? 2 : 1;
+
+      // Check for first action of session bonus (1.5x)
+      const sessionMultiplier = state.sessionFirstAction ? 1.5 : 1;
+      const finalMultiplier = isCriticalHit ? multiplier : sessionMultiplier;
+
+      // Execute the action's effect with potential multiplier
+      let outcome: EventOutcome = config.perform(state);
+      if (finalMultiplier > 1) {
+        outcome = applyOutcomeWithMultiplier(outcome, finalMultiplier);
+      }
+
+      // Apply outcome to state
       const newSupport = { ...state.support };
       if (outcome.supportDelta) {
         for (const s in outcome.supportDelta) {
           if (s === 'ALL') {
-            // Apply support change to all states
             for (const code in newSupport) {
               newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
             }
@@ -129,51 +198,83 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
         }
       }
+
       const newCloutVal = Math.max(0, newClout + (outcome.cloutDelta || 0));
       const newFundsVal = Math.max(0, newFunds + (outcome.fundsDelta || 0));
       const newRiskVal = Math.max(0, state.risk + (outcome.riskDelta || 0));
       const newNewsLog = [...state.newsLog];
+
+      if (isCriticalHit) {
+        newNewsLog.push(`⚡ CRITICAL HIT! ${config.name} had double effect!`);
+      } else if (state.sessionFirstAction) {
+        newNewsLog.push(`☀️ Morning Momentum! First action bonus applied!`);
+      }
+
       if (outcome.message) {
         newNewsLog.push(outcome.message);
       }
 
-      // Advance one turn
+      // Calculate streak
+      const riskIncreased = newRiskVal > state.risk;
+      let newStreak = riskIncreased ? 0 : state.streak + 1;
+      let newHighestStreak = Math.max(state.highestStreak, newStreak);
+
+      // Check for streak bonuses
+      const streakBonus = STREAK_BONUSES[newStreak as keyof typeof STREAK_BONUSES];
+      let bonusClout = 0;
+      let bonusFunds = 0;
+
+      if (streakBonus) {
+        newNewsLog.push(streakBonus.message);
+        if ('clout' in streakBonus) bonusClout = streakBonus.clout;
+        if ('funds' in streakBonus) bonusFunds = streakBonus.funds;
+        if ('supportBonus' in streakBonus && streakBonus.supportBonus) {
+          const randomState = getRandomStateCode(newSupport);
+          newSupport[randomState] = Math.min(100, newSupport[randomState] + 10);
+          newNewsLog.push(`🎯 ${randomState} received +10% support bonus!`);
+        }
+      }
+
       const newTurn = state.turn + 1;
-      // Start building the new state after applying action results
+
       let newState: GameState = {
         ...state,
         support: newSupport,
-        clout: newCloutVal,
-        funds: newFundsVal,
+        clout: newCloutVal + bonusClout,
+        funds: newFundsVal + bonusFunds,
         risk: newRiskVal,
         turn: newTurn,
         newsLog: newNewsLog,
-        socialFeed: [...state.socialFeed],  // will add new tweets below
-        pendingEvent: state.pendingEvent,   // (should be undefined here)
+        socialFeed: [...state.socialFeed],
+        pendingEvent: state.pendingEvent,
         victory: false,
         gameOver: false,
-        advisors: state.advisors
+        advisors: state.advisors,
+        // Gamification updates
+        streak: newStreak,
+        highestStreak: newHighestStreak,
+        lastActionWasCritical: isCriticalHit,
+        totalCriticalHits: state.totalCriticalHits + (isCriticalHit ? 1 : 0),
+        sessionFirstAction: false,
+        achievementsUnlocked: state.achievementsUnlocked,
       };
 
-      // Generate social media reactions to this action
+      // Generate social media reactions
       const tweets = generateTweets(config.name);
       newState.socialFeed = [...state.socialFeed, ...tweets];
 
-      // Possibly trigger a dynamic event this turn
+      // Possibly trigger a dynamic event
       let event = null;
       if (newTurn === 1) {
-        // Ensure an early event (on first turn) for demonstration
         event = generateEvent(newState);
       } else if (Math.random() < 0.3) {
-        // Random chance of event on subsequent turns
         event = generateEvent(newState);
       }
+
       if (event) {
         if (event.options && event.options.length > 0) {
-          // Got an interactive event with choices – hold it for player decision
           newState.pendingEvent = event;
         } else {
-          // Got a narrative event (no choices) – apply its outcome immediately
           if (event.outcome) {
             if (event.outcome.supportDelta) {
               for (const s in event.outcome.supportDelta) {
@@ -190,17 +291,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
             if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
           }
-          // Log the narrative event
           newState.newsLog.push(`${event.title}: ${event.description}`);
         }
       }
 
-      // Check victory condition (>= 80% average support)
+      // Check victory/defeat conditions
       const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
       if (avgSupport >= 80) {
         newState.victory = true;
       }
-      // Check defeat condition (risk >= 100 triggers ban)
       if (newState.risk >= 100) {
         newState.gameOver = true;
         newState.newsLog.push("All platforms ban your movement! Game Over.");
@@ -214,12 +313,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const event = state.pendingEvent;
       const choice = event.options && event.options[action.optionIndex];
       if (!choice) {
-        // No valid choice (should not happen), just clear pending event
         return { ...state, pendingEvent: undefined };
       }
+
       const outcome = choice.outcome;
-      // Apply outcome effects of the chosen option
       const newSupport = { ...state.support };
+
       if (outcome.supportDelta) {
         for (const s in outcome.supportDelta) {
           if (s === 'ALL') {
@@ -231,11 +330,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
         }
       }
+
       const newCloutVal = Math.max(0, state.clout + (outcome.cloutDelta || 0));
       const newFundsVal = Math.max(0, state.funds + (outcome.fundsDelta || 0));
       const newRiskVal = Math.max(0, state.risk + (outcome.riskDelta || 0));
       const newNewsLog = [...state.newsLog];
-      // Log the event resolution and outcome
+
       newNewsLog.push(`Event resolved: ${event.title} - Chose "${choice.text}"`);
       if (outcome.message) {
         newNewsLog.push(outcome.message);
@@ -248,15 +348,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         funds: newFundsVal,
         risk: newRiskVal,
         newsLog: newNewsLog,
-        pendingEvent: undefined,  // event resolved
+        pendingEvent: undefined,
         victory: false,
         gameOver: false,
-        turn: state.turn,  // turn does not advance on resolution, it was advanced on the action already
+        turn: state.turn,
         socialFeed: [...state.socialFeed],
-        advisors: state.advisors
+        advisors: state.advisors,
+        lastActionWasCritical: false,
       };
 
-      // Re-check victory/defeat after event outcome
       const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
       if (avgSupport >= 80) {
         newState.victory = true;
@@ -265,13 +365,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         newState.gameOver = true;
         newState.newsLog.push("All platforms ban your movement! Game Over.");
       }
+
       return newState;
     }
 
+    case 'CLEAR_CRITICAL_FLAG': {
+      return { ...state, lastActionWasCritical: false };
+    }
+
     case 'RESET_GAME': {
-      // Start a new game (fresh state)
-      const newState = createInitialState();
-      return newState;
+      return createInitialState();
     }
 
     default:
@@ -279,21 +382,37 @@ function gameReducer(state: GameState, action: GameAction): GameState {
   }
 }
 
-// Create React Context for the game state
+// Create React Context
 interface GameContextProps {
   state: GameState;
   dispatch: React.Dispatch<GameAction>;
 }
 const GameContext = createContext<GameContextProps | undefined>(undefined);
 
-// Provider component to wrap the app
+// Provider component
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load saved game state from localStorage if available, otherwise use default
   const savedState = localStorage.getItem('gameSave');
-  const initialState = savedState ? (JSON.parse(savedState) as GameState) : createInitialState();
+  let initialState: GameState;
+
+  if (savedState) {
+    const parsed = JSON.parse(savedState) as GameState;
+    // Ensure new fields exist (migration for existing saves)
+    initialState = {
+      ...parsed,
+      streak: parsed.streak ?? 0,
+      highestStreak: parsed.highestStreak ?? 0,
+      lastActionWasCritical: parsed.lastActionWasCritical ?? false,
+      totalCriticalHits: parsed.totalCriticalHits ?? 0,
+      sessionFirstAction: true, // Reset on page load
+      achievementsUnlocked: parsed.achievementsUnlocked ?? [],
+    };
+  } else {
+    initialState = createInitialState();
+  }
+
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
-  // Persist game state to localStorage on every change
+  // Persist game state to localStorage
   useEffect(() => {
     localStorage.setItem('gameSave', JSON.stringify(state));
   }, [state]);
@@ -305,7 +424,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-// Custom hook for consuming the game context
+// Custom hook
 export const useGameContext = () => {
   const context = useContext(GameContext);
   if (!context) {

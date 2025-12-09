@@ -50,12 +50,13 @@ describe('AdvisorsPanel', () => {
     expect(screen.getByText(/I was organizing rallies before it was cool/)).toBeInTheDocument();
   });
 
-  it('should render quotes in list format', () => {
-    renderWithProvider();
+  it('should render quotes in card format', () => {
+    const { container } = renderWithProvider();
 
-    const lists = screen.getAllByRole('list');
-    // Each advisor has a list of quotes (3 advisors = 3 lists)
-    expect(lists.length).toBeGreaterThanOrEqual(3);
+    // Quotes are now rendered in div elements with advisor-quote class
+    const quoteElements = container.querySelectorAll('.advisor-quote');
+    // Each advisor shows up to 2 quotes, 3 advisors = up to 6 quotes
+    expect(quoteElements.length).toBeGreaterThanOrEqual(3);
   });
 
   it('should display quotes with quotation marks', () => {

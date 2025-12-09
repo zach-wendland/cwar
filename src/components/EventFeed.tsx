@@ -1,6 +1,10 @@
-// EventFeed.tsx - displays the news log and social media posts, plus current stats
 import React from 'react';
+import { motion } from 'framer-motion';
+import { Newspaper, MessageCircle, Activity } from 'lucide-react';
 import { useGameContext } from '../game/GameContext';
+import GlassPanel from './modern/GlassPanel';
+import StatsBar from './modern/StatsBar';
+import RiskMeter from './modern/RiskMeter';
 
 const EventFeed: React.FC = () => {
   const { state } = useGameContext();
@@ -12,35 +16,65 @@ const EventFeed: React.FC = () => {
   );
 
   return (
-    <div>
-      {/* Current Stats overview */}
-      <div className="mb-2">
-        <strong>Turn:</strong> {state.turn} &nbsp;
-        <strong>Clout:</strong> {state.clout} &nbsp;
-        <strong>Funds:</strong> ${state.funds} &nbsp;
-        <strong>Risk:</strong> {state.risk}% &nbsp;
-        <strong>Avg Support:</strong> {avgSupport}%
-      </div>
+    <div className="event-feed-container">
+      {/* Stats Bar */}
+      <StatsBar
+        turn={state.turn}
+        clout={state.clout}
+        funds={state.funds}
+        risk={state.risk}
+        avgSupport={avgSupport}
+        streak={state.streak}
+      />
+
+      {/* Risk Meter */}
+      <GlassPanel className="mb-4" animate={false}>
+        <RiskMeter risk={state.risk} />
+      </GlassPanel>
+
       {/* News Log Section */}
-      <div className="feed-section mb-3">
-        <h5>News</h5>
-        <ul className="list-unstyled ps-3">
-          {newsItems.map((text, idx) => (
-            <li key={idx}>▪️ {text}</li>
-          ))}
-        </ul>
-      </div>
+      <GlassPanel title="News" icon={Newspaper} className="mb-4" glowColor="purple">
+        <div className="news-feed max-h-48 overflow-y-auto">
+          {newsItems.length === 0 ? (
+            <p className="text-[var(--color-text-muted)] text-sm italic">No news yet...</p>
+          ) : (
+            newsItems.slice(-10).reverse().map((text, idx) => (
+              <motion.div
+                key={idx}
+                className="news-item"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+              >
+                <span className="news-marker">▪</span>
+                {text}
+              </motion.div>
+            ))
+          )}
+        </div>
+      </GlassPanel>
+
       {/* Social Media Reactions Section */}
-      <div className="feed-section">
-        <h5>Social Media Reactions</h5>
-        <ul className="list-unstyled ps-3">
-          {tweets.map((post, idx) => (
-            <li key={idx}>
-              <em>{post.user}:</em> {post.content}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <GlassPanel title="Social Media" icon={MessageCircle} glowColor="cyan">
+        <div className="social-feed max-h-48 overflow-y-auto">
+          {tweets.length === 0 ? (
+            <p className="text-[var(--color-text-muted)] text-sm italic">No reactions yet...</p>
+          ) : (
+            tweets.slice(-8).reverse().map((post, idx) => (
+              <motion.div
+                key={idx}
+                className="tweet-card"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+              >
+                <span className="tweet-user">{post.user}</span>
+                <span className="tweet-content">{post.content}</span>
+              </motion.div>
+            ))
+          )}
+        </div>
+      </GlassPanel>
     </div>
   );
 };

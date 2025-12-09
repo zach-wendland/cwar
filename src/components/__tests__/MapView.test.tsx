@@ -59,8 +59,8 @@ describe('MapView', () => {
     const paths = screen.getByTestId('usa-map').querySelectorAll('path.state');
     paths.forEach(path => {
       const fill = path.getAttribute('fill');
-      // With initial 5% support, all states should have gray color
-      expect(fill).toBe('#ccc');
+      // With initial 5% support, all states should have gray color (tailwind gray-300)
+      expect(fill).toBe('#d1d5db');
     });
   });
 
@@ -85,10 +85,10 @@ describe('getStateColor utility', () => {
       </GameProvider>
     );
 
-    // Initial state should have low support (5%), so all states should be gray
+    // Initial state should have low support (5%), so all states should be gray (tailwind gray-300)
     const paths = container.querySelectorAll('path.state');
     paths.forEach(path => {
-      expect(path.getAttribute('fill')).toBe('#ccc');
+      expect(path.getAttribute('fill')).toBe('#d1d5db');
     });
   });
 });

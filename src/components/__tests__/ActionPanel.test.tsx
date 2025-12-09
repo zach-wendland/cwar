@@ -38,16 +38,19 @@ describe('ActionPanel', () => {
   it('should display action costs', () => {
     renderWithProvider();
 
-    // Check for cost displays (looking for parentheses with costs)
+    // Check for cost displays (costs are now shown as numbers with icons)
     const buttons = screen.getAllByRole('button');
     const memeCampaignButton = buttons.find(b => b.textContent?.includes('Launch Meme Campaign'));
     const rallyButton = buttons.find(b => b.textContent?.includes('Organize Rally'));
     const botArmyButton = buttons.find(b => b.textContent?.includes('Deploy Bot Army'));
 
-    expect(memeCampaignButton?.textContent).toContain('clout');
-    expect(rallyButton?.textContent).toContain('funds');
-    expect(botArmyButton?.textContent).toContain('funds');
-    expect(botArmyButton?.textContent).toContain('clout');
+    // Meme campaign costs 10 clout
+    expect(memeCampaignButton?.textContent).toContain('10');
+    // Rally costs 30 funds
+    expect(rallyButton?.textContent).toContain('30');
+    // Bot army costs 20 funds and 5 clout
+    expect(botArmyButton?.textContent).toContain('20');
+    expect(botArmyButton?.textContent).toContain('5');
   });
 
   it('should have all buttons enabled initially', () => {
