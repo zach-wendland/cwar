@@ -1,8 +1,10 @@
-"use client";
-
-import React, { createContext, useContext, useEffect, useReducer } from "react";
-import { generateAdvisors, generateEvent, generateTweets } from "./generators";
-import { actionsConfig } from "./actions";
+import React, { createContext, useContext, useEffect, useReducer } from 'react';
+import { generateAdvisors, generateEvent, generateTweets, resetEventTracking } from './generators';
+import { tryStartChain, progressChain, resetChainTracking, hasActiveChain, getActiveChainEvent, ChainedGameEvent } from './eventChains';
+import { actionsConfig } from './actions';
+import { factions, initializeFactionSupport, calculateFactionEffect } from './factions';
+import { loadPrestigeData, getStartingBonuses, getActiveEffects } from './prestige';
+import { applyAdvisorBonus, getActionDiscount, getCriticalBonus } from './advisorAbilities';
 
 // Define interfaces for game state and related entities
 export interface Advisor {
@@ -31,6 +33,10 @@ export interface GameEvent {
   description: string;
   options?: EventOption[];
   outcome?: EventOutcome;
+  // Chain event metadata
+  chainId?: string;
+  stepId?: string;
+  isChainEvent?: boolean;
 }
 
 export interface Tweet {
@@ -58,98 +64,63 @@ export interface GameState {
   totalCriticalHits: number;
   sessionFirstAction: boolean;
   achievementsUnlocked: string[];
+  // Faction system
+  factionSupport: { [factionId: string]: number };
 }
 
 // Actions for the reducer
 type GameAction =
-  | { type: "PERFORM_ACTION"; actionId: string }
-  | { type: "RESOLVE_EVENT"; optionIndex: number }
-  | { type: "RESET_GAME" }
-  | { type: "CLEAR_CRITICAL_FLAG" };
+  | { type: 'PERFORM_ACTION'; actionId: string }
+  | { type: 'RESOLVE_EVENT'; optionIndex: number }
+  | { type: 'RESET_GAME' }
+  | { type: 'CLEAR_CRITICAL_FLAG' };
 
 // Critical hit chance (10%)
-const CRITICAL_HIT_CHANCE = 0.1;
+const CRITICAL_HIT_CHANCE = 0.10;
 
 // Streak bonus thresholds
 const STREAK_BONUSES = {
-  3: { clout: 5, message: "3-Turn Streak! +5 Clout bonus!" },
-  5: { funds: 20, message: "5-Turn Streak! +$20 Funds bonus!" },
-  10: {
-    supportBonus: true,
-    message: "10-Turn Streak! +10% Support to a random state!",
-  },
+  3: { clout: 5, message: '🔥 3-Turn Streak! +5 Clout bonus!' },
+  5: { funds: 20, message: '🔥 5-Turn Streak! +$20 Funds bonus!' },
+  10: { supportBonus: true, message: '🔥 10-Turn Streak! +10% Support to a random state!' },
 };
 
 // Helper to create a fresh initial state
 function createInitialState(): GameState {
-  const stateCodes = [
-    "AL",
-    "AK",
-    "AZ",
-    "AR",
-    "CA",
-    "CO",
-    "CT",
-    "DE",
-    "DC",
-    "FL",
-    "GA",
-    "HI",
-    "ID",
-    "IL",
-    "IN",
-    "IA",
-    "KS",
-    "KY",
-    "LA",
-    "ME",
-    "MD",
-    "MA",
-    "MI",
-    "MN",
-    "MS",
-    "MO",
-    "MT",
-    "NE",
-    "NV",
-    "NH",
-    "NJ",
-    "NM",
-    "NY",
-    "NC",
-    "ND",
-    "OH",
-    "OK",
-    "OR",
-    "PA",
-    "RI",
-    "SC",
-    "SD",
-    "TN",
-    "TX",
-    "UT",
-    "VT",
-    "VA",
-    "WA",
-    "WV",
-    "WI",
-    "WY",
-  ];
+  const stateCodes = ["AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI",
+                      "ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN",
+                      "MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH",
+                      "OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA",
+                      "WV","WI","WY"];
+
+  // Load prestige bonuses
+  const prestigeData = loadPrestigeData();
+  const bonuses = getStartingBonuses(prestigeData);
+
   const supportInit: { [state: string]: number } = {};
-  stateCodes.forEach((code) => {
-    supportInit[code] = 5;
-  });
+  stateCodes.forEach(code => { supportInit[code] = 5 + bonuses.support; });
+
+  // Initialize faction support with prestige bonuses
+  const factionSupportInit = initializeFactionSupport();
+  for (const factionId in bonuses.factionBonuses) {
+    if (factionSupportInit[factionId] !== undefined) {
+      factionSupportInit[factionId] = Math.min(100, factionSupportInit[factionId] + bonuses.factionBonuses[factionId]);
+    }
+  }
+
+  const newsMessages = ["Game start: Your movement is born. Spread influence and avoid getting banned!"];
+  if (bonuses.clout > 0 || bonuses.funds > 0 || bonuses.support > 0) {
+    newsMessages.push(`Legacy bonuses applied: +${bonuses.clout} Clout, +$${bonuses.funds} Funds, +${bonuses.support}% Support`);
+  }
 
   return {
     turn: 0,
     support: supportInit,
-    clout: 50,
-    funds: 100,
+    clout: 50 + bonuses.clout,
+    funds: 100 + bonuses.funds,
     risk: 0,
     advisors: generateAdvisors(),
-    newsLog: [
-      "Game start: Your movement is born. Spread influence and avoid getting banned!",
-    ],
+    newsLog: newsMessages,
     socialFeed: [],
     pendingEvent: undefined,
     victory: false,
@@ -161,6 +132,8 @@ function createInitialState(): GameState {
     totalCriticalHits: 0,
     sessionFirstAction: true,
     achievementsUnlocked: [],
+    // Faction system
+    factionSupport: factionSupportInit,
   };
 }
 
@@ -176,8 +149,7 @@ function applyOutcomeWithMultiplier(
     for (const key in outcome.supportDelta) {
       const value = outcome.supportDelta[key];
       // Only multiply positive values (benefits)
-      result.supportDelta[key] =
-        value > 0 ? Math.round(value * multiplier) : value;
+      result.supportDelta[key] = value > 0 ? Math.round(value * multiplier) : value;
     }
   }
 
@@ -203,46 +175,43 @@ function getRandomStateCode(support: { [key: string]: number }): string {
 // Reducer to handle game state transitions
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case "PERFORM_ACTION": {
-      const config = actionsConfig.find((act) => act.id === action.actionId);
+    case 'PERFORM_ACTION': {
+      const config = actionsConfig.find(act => act.id === action.actionId);
       if (!config) return state;
 
       if (state.pendingEvent) {
         return state;
       }
 
-      // Check resource costs
-      if (config.cost) {
-        if (config.cost.funds && state.funds < config.cost.funds) {
-          return {
-            ...state,
-            newsLog: [
-              ...state.newsLog,
-              "Not enough funds for action: " + config.name,
-            ],
-          };
-        }
-        if (config.cost.clout && state.clout < config.cost.clout) {
-          return {
-            ...state,
-            newsLog: [
-              ...state.newsLog,
-              "Not enough clout to perform action: " + config.name,
-            ],
-          };
-        }
+      // Get advisor names for ability calculations
+      const advisorNames = state.advisors.map(a => a.name);
+
+      // Get action discounts from advisors
+      const { fundsDiscount, cloutDiscount } = getActionDiscount(action.actionId, advisorNames);
+
+      // Calculate actual costs after discounts
+      const actualFundsCost = config.cost?.funds
+        ? Math.round(config.cost.funds * (1 - fundsDiscount / 100))
+        : 0;
+      const actualCloutCost = config.cost?.clout
+        ? Math.round(config.cost.clout * (1 - cloutDiscount / 100))
+        : 0;
+
+      // Check resource costs (with discounts applied)
+      if (actualFundsCost > 0 && state.funds < actualFundsCost) {
+        return { ...state, newsLog: [...state.newsLog, "Not enough funds for action: " + config.name] };
+      }
+      if (actualCloutCost > 0 && state.clout < actualCloutCost) {
+        return { ...state, newsLog: [...state.newsLog, "Not enough clout to perform action: " + config.name] };
       }
 
-      // Deduct costs
-      let newFunds = state.funds;
-      let newClout = state.clout;
-      if (config.cost) {
-        if (config.cost.funds) newFunds -= config.cost.funds;
-        if (config.cost.clout) newClout -= config.cost.clout;
-      }
+      // Deduct costs (with discounts)
+      let newFunds = state.funds - actualFundsCost;
+      let newClout = state.clout - actualCloutCost;
 
-      // Check for critical hit
-      const isCriticalHit = Math.random() < CRITICAL_HIT_CHANCE;
+      // Check for critical hit (with advisor bonus)
+      const critBonus = getCriticalBonus(advisorNames);
+      const isCriticalHit = Math.random() < (CRITICAL_HIT_CHANCE + critBonus / 100);
       const multiplier = isCriticalHit ? 2 : 1;
 
       // Check for first action of session bonus (1.5x)
@@ -255,22 +224,34 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         outcome = applyOutcomeWithMultiplier(outcome, finalMultiplier);
       }
 
+      // Apply advisor ability bonuses
+      outcome = applyAdvisorBonus(outcome, config.id, advisorNames);
+
       // Apply outcome to state
       const newSupport = { ...state.support };
+      const newFactionSupport = { ...state.factionSupport };
+
+      // Calculate faction-specific effects for this action
+      const baseSupportChange = outcome.supportDelta?.['ALL'] || 0;
+      const factionEffects = baseSupportChange !== 0
+        ? calculateFactionEffect(config.id, baseSupportChange, newFactionSupport)
+        : {};
+
+      // Update faction support levels
+      for (const factionId in factionEffects) {
+        newFactionSupport[factionId] = Math.max(0, Math.min(100,
+          (newFactionSupport[factionId] || 50) + factionEffects[factionId]
+        ));
+      }
+
       if (outcome.supportDelta) {
         for (const s in outcome.supportDelta) {
-          if (s === "ALL") {
+          if (s === 'ALL') {
             for (const code in newSupport) {
-              newSupport[code] = Math.max(
-                0,
-                Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0))
-              );
+              newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
             }
           } else if (newSupport[s] !== undefined) {
-            newSupport[s] = Math.max(
-              0,
-              Math.min(100, newSupport[s] + outcome.supportDelta[s])
-            );
+            newSupport[s] = Math.max(0, Math.min(100, newSupport[s] + outcome.supportDelta[s]));
           }
         }
       }
@@ -281,9 +262,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const newNewsLog = [...state.newsLog];
 
       if (isCriticalHit) {
-        newNewsLog.push(`CRITICAL HIT! ${config.name} had double effect!`);
+        newNewsLog.push(`⚡ CRITICAL HIT! ${config.name} had double effect!`);
       } else if (state.sessionFirstAction) {
-        newNewsLog.push(`Morning Momentum! First action bonus applied!`);
+        newNewsLog.push(`☀️ Morning Momentum! First action bonus applied!`);
       }
 
       if (outcome.message) {
@@ -296,19 +277,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let newHighestStreak = Math.max(state.highestStreak, newStreak);
 
       // Check for streak bonuses
-      const streakBonus =
-        STREAK_BONUSES[newStreak as keyof typeof STREAK_BONUSES];
+      const streakBonus = STREAK_BONUSES[newStreak as keyof typeof STREAK_BONUSES];
       let bonusClout = 0;
       let bonusFunds = 0;
 
       if (streakBonus) {
         newNewsLog.push(streakBonus.message);
-        if ("clout" in streakBonus) bonusClout = streakBonus.clout;
-        if ("funds" in streakBonus) bonusFunds = streakBonus.funds;
-        if ("supportBonus" in streakBonus && streakBonus.supportBonus) {
+        if ('clout' in streakBonus) bonusClout = streakBonus.clout;
+        if ('funds' in streakBonus) bonusFunds = streakBonus.funds;
+        if ('supportBonus' in streakBonus && streakBonus.supportBonus) {
           const randomState = getRandomStateCode(newSupport);
           newSupport[randomState] = Math.min(100, newSupport[randomState] + 10);
-          newNewsLog.push(`${randomState} received +10% support bonus!`);
+          newNewsLog.push(`🎯 ${randomState} received +10% support bonus!`);
         }
       }
 
@@ -334,6 +314,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         totalCriticalHits: state.totalCriticalHits + (isCriticalHit ? 1 : 0),
         sessionFirstAction: false,
         achievementsUnlocked: state.achievementsUnlocked,
+        // Faction system
+        factionSupport: newFactionSupport,
       };
 
       // Generate social media reactions
@@ -341,11 +323,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       newState.socialFeed = [...state.socialFeed, ...tweets];
 
       // Possibly trigger a dynamic event
-      let event = null;
-      if (newTurn === 1) {
+      // First check for active chain events, then try to start new chains, then regular events
+      let event: GameEvent | null = null;
+
+      // Check for continuation of active chain
+      const activeChainEvent = getActiveChainEvent(newState);
+      if (activeChainEvent) {
+        event = activeChainEvent;
+      } else if (newTurn === 1) {
+        // First turn: guaranteed regular event
         event = generateEvent(newState);
       } else if (Math.random() < 0.3) {
-        event = generateEvent(newState);
+        // 30% chance for event
+        // 20% of that is chain start attempt, 80% regular event
+        if (Math.random() < 0.2) {
+          const chainEvent = tryStartChain(newState);
+          event = chainEvent || generateEvent(newState);
+        } else {
+          event = generateEvent(newState);
+        }
       }
 
       if (event) {
@@ -355,52 +351,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           if (event.outcome) {
             if (event.outcome.supportDelta) {
               for (const s in event.outcome.supportDelta) {
-                if (s === "ALL") {
+                if (s === 'ALL') {
                   for (const code in newState.support) {
-                    newState.support[code] = Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        newState.support[code] +
-                          (event.outcome.supportDelta[s] || 0)
-                      )
-                    );
+                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (event.outcome.supportDelta[s] || 0)));
                   }
                 } else if (newState.support[s] !== undefined) {
-                  newState.support[s] = Math.max(
-                    0,
-                    Math.min(
-                      100,
-                      newState.support[s] + event.outcome.supportDelta[s]
-                    )
-                  );
+                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + event.outcome.supportDelta[s]));
                 }
               }
             }
-            if (event.outcome.cloutDelta)
-              newState.clout = Math.max(
-                0,
-                newState.clout + event.outcome.cloutDelta
-              );
-            if (event.outcome.fundsDelta)
-              newState.funds = Math.max(
-                0,
-                newState.funds + event.outcome.fundsDelta
-              );
-            if (event.outcome.riskDelta)
-              newState.risk = Math.max(
-                0,
-                newState.risk + event.outcome.riskDelta
-              );
+            if (event.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + event.outcome.cloutDelta);
+            if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
+            if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
           }
           newState.newsLog.push(`${event.title}: ${event.description}`);
         }
       }
 
       // Check victory/defeat conditions
-      const avgSupport =
-        Object.values(newState.support).reduce((a, b) => a + b, 0) /
-        Object.keys(newState.support).length;
+      const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
       if (avgSupport >= 80) {
         newState.victory = true;
       }
@@ -412,7 +381,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return newState;
     }
 
-    case "RESOLVE_EVENT": {
+    case 'RESOLVE_EVENT': {
       if (!state.pendingEvent) return state;
       const event = state.pendingEvent;
       const choice = event.options && event.options[action.optionIndex];
@@ -420,23 +389,22 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return { ...state, pendingEvent: undefined };
       }
 
+      // Handle chain event progression
+      if (event.isChainEvent && event.chainId) {
+        progressChain(event.chainId, action.optionIndex);
+      }
+
       const outcome = choice.outcome;
       const newSupport = { ...state.support };
 
       if (outcome.supportDelta) {
         for (const s in outcome.supportDelta) {
-          if (s === "ALL") {
+          if (s === 'ALL') {
             for (const code in newSupport) {
-              newSupport[code] = Math.max(
-                0,
-                Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0))
-              );
+              newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
             }
           } else if (newSupport[s] !== undefined) {
-            newSupport[s] = Math.max(
-              0,
-              Math.min(100, newSupport[s] + outcome.supportDelta[s])
-            );
+            newSupport[s] = Math.max(0, Math.min(100, newSupport[s] + outcome.supportDelta[s]));
           }
         }
       }
@@ -467,9 +435,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         lastActionWasCritical: false,
       };
 
-      const avgSupport =
-        Object.values(newState.support).reduce((a, b) => a + b, 0) /
-        Object.keys(newState.support).length;
+      const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
       if (avgSupport >= 80) {
         newState.victory = true;
       }
@@ -481,11 +447,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return newState;
     }
 
-    case "CLEAR_CRITICAL_FLAG": {
+    case 'CLEAR_CRITICAL_FLAG': {
       return { ...state, lastActionWasCritical: false };
     }
 
-    case "RESET_GAME": {
+    case 'RESET_GAME': {
+      resetEventTracking();
+      resetChainTracking();
       return createInitialState();
     }
 
@@ -502,47 +470,39 @@ interface GameContextProps {
 const GameContext = createContext<GameContextProps | undefined>(undefined);
 
 // Provider component
-export const GameProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [isClient, setIsClient] = React.useState(false);
-  const [state, dispatch] = useReducer(gameReducer, null, () => {
-    // Initial state will be set in useEffect for client-side only
-    return createInitialState();
-  });
-
-  // Handle client-side initialization and localStorage
-  useEffect(() => {
-    setIsClient(true);
-    const savedState = localStorage.getItem("gameSave");
-    if (savedState) {
-      try {
-        const parsed = JSON.parse(savedState) as GameState;
-        // Ensure new fields exist (migration for existing saves)
-        const migratedState: GameState = {
-          ...parsed,
-          streak: parsed.streak ?? 0,
-          highestStreak: parsed.highestStreak ?? 0,
-          lastActionWasCritical: parsed.lastActionWasCritical ?? false,
-          totalCriticalHits: parsed.totalCriticalHits ?? 0,
-          sessionFirstAction: true, // Reset on page load
-          achievementsUnlocked: parsed.achievementsUnlocked ?? [],
-        };
-        // Dispatch a reset with the saved state
-        dispatch({ type: "RESET_GAME" });
-        // We need to manually set state - using a different approach
-      } catch (e) {
-        console.error("Failed to parse saved game state:", e);
-      }
+export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Lazy initializer to avoid SSR issues with localStorage
+  const initializeState = (): GameState => {
+    if (typeof window === 'undefined') {
+      return createInitialState();
     }
-  }, []);
+
+    const savedState = localStorage.getItem('gameSave');
+    if (savedState) {
+      const parsed = JSON.parse(savedState) as GameState;
+      // Ensure new fields exist (migration for existing saves)
+      return {
+        ...parsed,
+        streak: parsed.streak ?? 0,
+        highestStreak: parsed.highestStreak ?? 0,
+        lastActionWasCritical: parsed.lastActionWasCritical ?? false,
+        totalCriticalHits: parsed.totalCriticalHits ?? 0,
+        sessionFirstAction: true, // Reset on page load
+        achievementsUnlocked: parsed.achievementsUnlocked ?? [],
+        factionSupport: parsed.factionSupport ?? initializeFactionSupport(),
+      };
+    }
+    return createInitialState();
+  };
+
+  const [state, dispatch] = useReducer(gameReducer, undefined, initializeState);
 
   // Persist game state to localStorage
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem("gameSave", JSON.stringify(state));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gameSave', JSON.stringify(state));
     }
-  }, [state, isClient]);
+  }, [state]);
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>
@@ -555,10 +515,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useGameContext = () => {
   const context = useContext(GameContext);
   if (!context) {
-    throw new Error("useGameContext must be used within a GameProvider");
+    throw new Error('useGameContext must be used within a GameProvider');
   }
   return context;
 };
-
-// Export for tests
-export { createInitialState, gameReducer };

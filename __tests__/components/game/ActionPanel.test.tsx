@@ -17,13 +17,20 @@ describe("ActionPanel", () => {
     expect(screen.getByText("Actions")).toBeInTheDocument();
   });
 
-  it("renders all 4 action buttons", () => {
+  it("renders all 11 action buttons", () => {
     renderWithProvider();
 
     expect(screen.getByText("Launch Meme Campaign")).toBeInTheDocument();
     expect(screen.getByText("Fundraise")).toBeInTheDocument();
     expect(screen.getByText("Organize Rally")).toBeInTheDocument();
     expect(screen.getByText("Deploy Bot Army")).toBeInTheDocument();
+    expect(screen.getByText("Podcast Appearance")).toBeInTheDocument();
+    expect(screen.getByText("Coordinate Hashtag")).toBeInTheDocument();
+    expect(screen.getByText("Debate Challenge")).toBeInTheDocument();
+    expect(screen.getByText("Grassroots Canvassing")).toBeInTheDocument();
+    expect(screen.getByText("Influencer Partnership")).toBeInTheDocument();
+    expect(screen.getByText("Legal Defense Fund")).toBeInTheDocument();
+    expect(screen.getByText("Platform Migration")).toBeInTheDocument();
   });
 
   it("displays action descriptions", () => {
@@ -41,8 +48,8 @@ describe("ActionPanel", () => {
     renderWithProvider();
 
     // Meme campaign costs 10 clout
-    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getAllByText("10").length).toBeGreaterThan(0);
     // Rally costs 30 funds
-    expect(screen.getByText("30")).toBeInTheDocument();
+    expect(screen.getAllByText("30").length).toBeGreaterThan(0);
   });
 });

@@ -25,10 +25,17 @@ describe("actionsConfig", () => {
     totalCriticalHits: 0,
     sessionFirstAction: true,
     achievementsUnlocked: [],
+    factionSupport: {
+      tech_workers: 50,
+      rural_voters: 50,
+      young_activists: 50,
+      moderates: 50,
+      business_class: 50,
+    },
   });
 
-  it("should have 4 actions defined", () => {
-    expect(actionsConfig.length).toBe(4);
+  it("should have 11 actions defined", () => {
+    expect(actionsConfig.length).toBe(11);
   });
 
   describe("meme_campaign action", () => {
