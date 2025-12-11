@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import { generateAdvisors, generateEvent, generateTweets, resetEventTracking } from './generators';
 import { tryStartChain, progressChain, resetChainTracking, hasActiveChain, getActiveChainEvent, ChainedGameEvent } from './eventChains';
-import { actionsConfig } from './actions';
+import {
+  actionsConfig,
+  canPerformAction,
+  tickCooldowns,
+  setActionCooldown,
+  updateConsecutiveUses,
+  getDiminishingReturnsMultiplier,
+  ACTION_COOLDOWNS,
+} from './actions';
 import { factions, initializeFactionSupport, calculateFactionEffect } from './factions';
 import { loadPrestigeData, getStartingBonuses, getActiveEffects } from './prestige';
 import { applyAdvisorBonus, getActionDiscount, getCriticalBonus } from './advisorAbilities';
@@ -44,6 +52,29 @@ export interface Tweet {
   content: string;
 }
 
+// Risk zone thresholds
+export const RISK_ZONES = {
+  SAFE: { min: 0, max: 49, color: 'green', label: 'Safe', costMultiplier: 1.0 },
+  CAUTION: { min: 50, max: 74, color: 'yellow', label: 'Caution', costMultiplier: 1.0 },
+  DANGER: { min: 75, max: 89, color: 'orange', label: 'Danger', costMultiplier: 1.2 },
+  CRITICAL: { min: 90, max: 99, color: 'red', label: 'Critical', costMultiplier: 1.3 },
+} as const;
+
+export type RiskZone = keyof typeof RISK_ZONES;
+
+export function getRiskZone(risk: number): RiskZone {
+  if (risk >= 90) return 'CRITICAL';
+  if (risk >= 75) return 'DANGER';
+  if (risk >= 50) return 'CAUTION';
+  return 'SAFE';
+}
+
+// Victory types
+export type VictoryType = 'POPULAR_MANDATE' | 'FACTION_DOMINANCE' | 'ECONOMIC_POWER' | 'SPEED_RUN';
+
+// Defeat types
+export type DefeatType = 'RISK_COLLAPSE' | 'FACTION_ABANDONMENT' | 'BANKRUPTCY' | 'TIME_OUT';
+
 // Main game state structure with gamification additions
 export interface GameState {
   turn: number;
@@ -57,6 +88,9 @@ export interface GameState {
   pendingEvent?: GameEvent;
   victory: boolean;
   gameOver: boolean;
+  // Victory/Defeat details
+  victoryType?: VictoryType;
+  defeatType?: DefeatType;
   // Gamification features
   streak: number;
   highestStreak: number;
@@ -66,6 +100,15 @@ export interface GameState {
   achievementsUnlocked: string[];
   // Faction system
   factionSupport: { [factionId: string]: number };
+  // Action economy tracking
+  actionCooldowns: { [actionId: string]: number };
+  consecutiveActionUses: { [actionId: string]: number };
+  // Economic tracking for win conditions
+  totalFundsEarned: number;
+  totalCloutEarned: number;
+  consecutiveNegativeFunds: number;
+  // Last risk zone for warning triggers
+  previousRiskZone: RiskZone;
 }
 
 // Actions for the reducer
@@ -125,6 +168,8 @@ function createInitialState(): GameState {
     pendingEvent: undefined,
     victory: false,
     gameOver: false,
+    victoryType: undefined,
+    defeatType: undefined,
     // Gamification
     streak: 0,
     highestStreak: 0,
@@ -134,6 +179,14 @@ function createInitialState(): GameState {
     achievementsUnlocked: [],
     // Faction system
     factionSupport: factionSupportInit,
+    // Action economy tracking
+    actionCooldowns: {},
+    consecutiveActionUses: {},
+    // Economic tracking
+    totalFundsEarned: 0,
+    totalCloutEarned: 0,
+    consecutiveNegativeFunds: 0,
+    previousRiskZone: 'SAFE',
   };
 }
 
@@ -172,6 +225,65 @@ function getRandomStateCode(support: { [key: string]: number }): string {
   return codes[Math.floor(Math.random() * codes.length)];
 }
 
+// Victory condition checks
+function checkVictoryConditions(state: GameState): VictoryType | null {
+  const avgSupport = Object.values(state.support).reduce((a, b) => a + b, 0) / Object.keys(state.support).length;
+  const statesControlled = Object.values(state.support).filter(s => s >= 60).length;
+  const highestFaction = Math.max(...Object.values(state.factionSupport));
+
+  // Popular Mandate: 80% avg support + 35 states at 60%+
+  if (avgSupport >= 80 && statesControlled >= 35) return 'POPULAR_MANDATE';
+
+  // Faction Dominance: Any faction at 95%+
+  if (highestFaction >= 95) return 'FACTION_DOMINANCE';
+
+  // Economic Power: Accumulated $500 funds and 200 clout over the game
+  if (state.totalFundsEarned >= 500 && state.totalCloutEarned >= 200) return 'ECONOMIC_POWER';
+
+  // Speed Run: Win before turn 20 with 75%+ avg support
+  if (state.turn <= 20 && avgSupport >= 75) return 'SPEED_RUN';
+
+  return null;
+}
+
+// Defeat condition checks
+function checkDefeatConditions(state: GameState): DefeatType | null {
+  // Risk Collapse: Risk hits 100
+  if (state.risk >= 100) return 'RISK_COLLAPSE';
+
+  // Faction Abandonment: Any faction at 0%
+  const lowestFaction = Math.min(...Object.values(state.factionSupport));
+  if (lowestFaction <= 0) return 'FACTION_ABANDONMENT';
+
+  // Bankruptcy: Negative funds for 3+ consecutive turns
+  if (state.consecutiveNegativeFunds >= 3) return 'BANKRUPTCY';
+
+  // Time Out: Turn 50 without victory
+  if (state.turn >= 50) return 'TIME_OUT';
+
+  return null;
+}
+
+// Get victory message
+function getVictoryMessage(type: VictoryType): string {
+  switch (type) {
+    case 'POPULAR_MANDATE': return '🏆 VICTORY: Popular Mandate! 80% support across 35+ states!';
+    case 'FACTION_DOMINANCE': return '🏆 VICTORY: Faction Dominance! One group fully supports you!';
+    case 'ECONOMIC_POWER': return '🏆 VICTORY: Economic Power! Your war chest is unstoppable!';
+    case 'SPEED_RUN': return '🏆 VICTORY: Speed Run! 75%+ support in under 20 turns!';
+  }
+}
+
+// Get defeat message
+function getDefeatMessage(type: DefeatType): string {
+  switch (type) {
+    case 'RISK_COLLAPSE': return '💀 DEFEAT: Risk Collapse! All platforms have banned you.';
+    case 'FACTION_ABANDONMENT': return '💀 DEFEAT: Faction Abandonment! You lost all support from a key group.';
+    case 'BANKRUPTCY': return '💀 DEFEAT: Bankruptcy! No funds for 3 turns - movement collapsed.';
+    case 'TIME_OUT': return '💀 DEFEAT: Time Out! 50 turns without victory - momentum lost.';
+  }
+}
+
 // Reducer to handle game state transitions
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -183,43 +295,69 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return state;
       }
 
+      // Check action availability (cooldowns, prerequisites, risk zone locks)
+      const actionCheck = canPerformAction(
+        action.actionId,
+        state,
+        state.actionCooldowns,
+        state.consecutiveActionUses
+      );
+
+      if (!actionCheck.canPerform) {
+        return { ...state, newsLog: [...state.newsLog, `Cannot perform ${config.name}: ${actionCheck.reason}`] };
+      }
+
       // Get advisor names for ability calculations
       const advisorNames = state.advisors.map(a => a.name);
 
       // Get action discounts from advisors
       const { fundsDiscount, cloutDiscount } = getActionDiscount(action.actionId, advisorNames);
 
-      // Calculate actual costs after discounts
+      // Apply risk zone cost multiplier
+      const riskZone = getRiskZone(state.risk);
+      const riskCostMultiplier = RISK_ZONES[riskZone].costMultiplier;
+
+      // Calculate actual costs after discounts and risk zone multiplier
       const actualFundsCost = config.cost?.funds
-        ? Math.round(config.cost.funds * (1 - fundsDiscount / 100))
+        ? Math.round(config.cost.funds * (1 - fundsDiscount / 100) * riskCostMultiplier)
         : 0;
       const actualCloutCost = config.cost?.clout
-        ? Math.round(config.cost.clout * (1 - cloutDiscount / 100))
+        ? Math.round(config.cost.clout * (1 - cloutDiscount / 100) * riskCostMultiplier)
         : 0;
 
-      // Check resource costs (with discounts applied)
+      // Check resource costs (with discounts and risk zone multiplier applied)
       if (actualFundsCost > 0 && state.funds < actualFundsCost) {
-        return { ...state, newsLog: [...state.newsLog, "Not enough funds for action: " + config.name] };
+        return { ...state, newsLog: [...state.newsLog, `Not enough funds for ${config.name} (need $${actualFundsCost})`] };
       }
       if (actualCloutCost > 0 && state.clout < actualCloutCost) {
-        return { ...state, newsLog: [...state.newsLog, "Not enough clout to perform action: " + config.name] };
+        return { ...state, newsLog: [...state.newsLog, `Not enough clout for ${config.name} (need ${actualCloutCost})`] };
       }
 
-      // Deduct costs (with discounts)
+      // Deduct costs (with discounts and risk zone multiplier)
       let newFunds = state.funds - actualFundsCost;
       let newClout = state.clout - actualCloutCost;
 
       // Check for critical hit (with advisor bonus)
       const critBonus = getCriticalBonus(advisorNames);
       const isCriticalHit = Math.random() < (CRITICAL_HIT_CHANCE + critBonus / 100);
-      const multiplier = isCriticalHit ? 2 : 1;
+      const critMultiplier = isCriticalHit ? 2 : 1;
 
       // Check for first action of session bonus (1.5x)
       const sessionMultiplier = state.sessionFirstAction ? 1.5 : 1;
-      const finalMultiplier = isCriticalHit ? multiplier : sessionMultiplier;
+      const finalMultiplier = isCriticalHit ? critMultiplier : sessionMultiplier;
+
+      // Apply diminishing returns multiplier
+      const diminishingMultiplier = actionCheck.diminishedMultiplier || 1;
 
       // Execute the action's effect with potential multiplier
       let outcome: EventOutcome = config.perform(state);
+
+      // Apply diminishing returns first (reduces base effect)
+      if (diminishingMultiplier < 1) {
+        outcome = applyOutcomeWithMultiplier(outcome, diminishingMultiplier);
+      }
+
+      // Then apply critical hit or session bonus (amplifies reduced effect)
       if (finalMultiplier > 1) {
         outcome = applyOutcomeWithMultiplier(outcome, finalMultiplier);
       }
@@ -267,8 +405,27 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         newNewsLog.push(`☀️ Morning Momentum! First action bonus applied!`);
       }
 
+      // Log diminishing returns warning
+      if (diminishingMultiplier < 1) {
+        const reduction = Math.round((1 - diminishingMultiplier) * 100);
+        newNewsLog.push(`📉 Diminishing returns: ${config.name} effectiveness reduced by ${reduction}%`);
+      }
+
       if (outcome.message) {
         newNewsLog.push(outcome.message);
+      }
+
+      // Check for risk zone change and add warning
+      const newRiskZone = getRiskZone(newRiskVal);
+      if (newRiskZone !== state.previousRiskZone) {
+        const zoneInfo = RISK_ZONES[newRiskZone];
+        if (newRiskZone === 'CAUTION') {
+          newNewsLog.push(`⚠️ CAUTION ZONE (${zoneInfo.min}-${zoneInfo.max}%): Advisors are getting nervous.`);
+        } else if (newRiskZone === 'DANGER') {
+          newNewsLog.push(`🔶 DANGER ZONE (${zoneInfo.min}-${zoneInfo.max}%): Action costs +20%. Platform scrutiny increasing!`);
+        } else if (newRiskZone === 'CRITICAL') {
+          newNewsLog.push(`🔴 CRITICAL ZONE (${zoneInfo.min}%+): Costs +30%. Some actions LOCKED. One wrong move and it's over!`);
+        }
       }
 
       // Calculate streak
@@ -294,6 +451,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const newTurn = state.turn + 1;
 
+      // Update cooldowns and consecutive uses
+      const updatedCooldowns = setActionCooldown(action.actionId, tickCooldowns(state.actionCooldowns));
+      const updatedConsecutiveUses = updateConsecutiveUses(action.actionId, state.consecutiveActionUses);
+
+      // Track economic totals
+      const fundsGained = outcome.fundsDelta && outcome.fundsDelta > 0 ? outcome.fundsDelta : 0;
+      const cloutGained = outcome.cloutDelta && outcome.cloutDelta > 0 ? outcome.cloutDelta : 0;
+
+      // Track consecutive negative funds
+      const newConsecutiveNegativeFunds = newFundsVal <= 0
+        ? state.consecutiveNegativeFunds + 1
+        : 0;
+
       let newState: GameState = {
         ...state,
         support: newSupport,
@@ -306,6 +476,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         pendingEvent: state.pendingEvent,
         victory: false,
         gameOver: false,
+        victoryType: undefined,
+        defeatType: undefined,
         advisors: state.advisors,
         // Gamification updates
         streak: newStreak,
@@ -316,6 +488,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         achievementsUnlocked: state.achievementsUnlocked,
         // Faction system
         factionSupport: newFactionSupport,
+        // Action economy tracking
+        actionCooldowns: updatedCooldowns,
+        consecutiveActionUses: updatedConsecutiveUses,
+        // Economic tracking
+        totalFundsEarned: state.totalFundsEarned + fundsGained,
+        totalCloutEarned: state.totalCloutEarned + cloutGained,
+        consecutiveNegativeFunds: newConsecutiveNegativeFunds,
+        previousRiskZone: newRiskZone,
       };
 
       // Generate social media reactions
@@ -368,14 +548,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Check victory/defeat conditions
-      const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
-      if (avgSupport >= 80) {
+      // Check victory conditions (multiple paths to win)
+      const victoryType = checkVictoryConditions(newState);
+      if (victoryType) {
         newState.victory = true;
+        newState.victoryType = victoryType;
+        newState.newsLog.push(getVictoryMessage(victoryType));
       }
-      if (newState.risk >= 100) {
+
+      // Check defeat conditions (multiple paths to lose)
+      const defeatType = checkDefeatConditions(newState);
+      if (defeatType) {
         newState.gameOver = true;
-        newState.newsLog.push("All platforms ban your movement! Game Over.");
+        newState.defeatType = defeatType;
+        newState.newsLog.push(getDefeatMessage(defeatType));
       }
 
       return newState;
@@ -419,6 +605,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         newNewsLog.push(outcome.message);
       }
 
+      // Track economic gains from events
+      const fundsGained = outcome.fundsDelta && outcome.fundsDelta > 0 ? outcome.fundsDelta : 0;
+      const cloutGained = outcome.cloutDelta && outcome.cloutDelta > 0 ? outcome.cloutDelta : 0;
+
+      // Track consecutive negative funds
+      const newConsecutiveNegativeFunds = newFundsVal <= 0
+        ? state.consecutiveNegativeFunds + 1
+        : 0;
+
+      // Track risk zone changes
+      const newRiskZone = getRiskZone(newRiskVal);
+
       let newState: GameState = {
         ...state,
         support: newSupport,
@@ -429,19 +627,36 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         pendingEvent: undefined,
         victory: false,
         gameOver: false,
+        victoryType: undefined,
+        defeatType: undefined,
         turn: state.turn,
         socialFeed: [...state.socialFeed],
         advisors: state.advisors,
         lastActionWasCritical: false,
+        // Preserve action economy state
+        actionCooldowns: state.actionCooldowns,
+        consecutiveActionUses: state.consecutiveActionUses,
+        // Update economic tracking
+        totalFundsEarned: state.totalFundsEarned + fundsGained,
+        totalCloutEarned: state.totalCloutEarned + cloutGained,
+        consecutiveNegativeFunds: newConsecutiveNegativeFunds,
+        previousRiskZone: newRiskZone,
       };
 
-      const avgSupport = Object.values(newState.support).reduce((a, b) => a + b, 0) / Object.keys(newState.support).length;
-      if (avgSupport >= 80) {
+      // Check victory conditions
+      const victoryType = checkVictoryConditions(newState);
+      if (victoryType) {
         newState.victory = true;
+        newState.victoryType = victoryType;
+        newState.newsLog.push(getVictoryMessage(victoryType));
       }
-      if (newState.risk >= 100) {
+
+      // Check defeat conditions
+      const defeatType = checkDefeatConditions(newState);
+      if (defeatType) {
         newState.gameOver = true;
-        newState.newsLog.push("All platforms ban your movement! Game Over.");
+        newState.defeatType = defeatType;
+        newState.newsLog.push(getDefeatMessage(defeatType));
       }
 
       return newState;
@@ -490,6 +705,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sessionFirstAction: true, // Reset on page load
         achievementsUnlocked: parsed.achievementsUnlocked ?? [],
         factionSupport: parsed.factionSupport ?? initializeFactionSupport(),
+        // New action economy fields
+        actionCooldowns: parsed.actionCooldowns ?? {},
+        consecutiveActionUses: parsed.consecutiveActionUses ?? {},
+        // New economic tracking fields
+        totalFundsEarned: parsed.totalFundsEarned ?? 0,
+        totalCloutEarned: parsed.totalCloutEarned ?? 0,
+        consecutiveNegativeFunds: parsed.consecutiveNegativeFunds ?? 0,
+        previousRiskZone: parsed.previousRiskZone ?? 'SAFE',
+        // Victory/defeat type tracking
+        victoryType: parsed.victoryType,
+        defeatType: parsed.defeatType,
       };
     }
     return createInitialState();

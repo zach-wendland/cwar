@@ -562,3 +562,132 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===== Mobile Touch Optimizations ===== */
+@media (max-width: 1023px) {
+  /* Ensure minimum 44px tap targets (Apple HIG) */
+  button,
+  .action-btn,
+  .clickable {
+    min-height: 44px;
+  }
+
+  /* 2-column action grid on mobile */
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Compact action cards for mobile grid */
+  .action-btn {
+    @apply px-3 py-3 mb-0;
+    min-height: 100px;
+  }
+
+  .action-btn__name {
+    @apply text-sm;
+  }
+
+  .action-btn__description {
+    @apply text-xs line-clamp-2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .action-btn__cost {
+    @apply flex-wrap gap-1.5;
+  }
+
+  .cost-item {
+    @apply text-[10px] px-1.5;
+  }
+
+  /* Larger stats bar on mobile */
+  .stats-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Compact advisors on mobile */
+  .advisor-card {
+    @apply p-3;
+  }
+
+  .advisor-avatar {
+    @apply w-8 h-8 text-sm;
+  }
+
+  .advisor-name {
+    @apply text-sm;
+  }
+
+  /* Map takes more height on mobile */
+  .map-container {
+    min-height: 300px;
+  }
+
+  /* Event feed compact on mobile */
+  .news-feed, .social-feed {
+    max-height: 150px;
+  }
+}
+
+/* Touch-specific styles - no hover state on touch devices */
+@media (hover: none) {
+  .action-btn:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    transform: none;
+  }
+
+  .stat-card:hover {
+    @apply bg-white/5;
+    transform: none;
+  }
+
+  .advisor-card:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+  }
+
+  .tweet-card:hover {
+    @apply bg-white/5;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Active state for touch feedback */
+  .action-btn:active:not(:disabled) {
+    @apply bg-cyan-500/10;
+    border-color: rgba(0, 212, 255, 0.3);
+    transform: scale(0.98);
+  }
+
+  .stat-card:active {
+    @apply bg-white/15;
+  }
+}
+
+/* Safe area padding for notched devices */
+@supports (padding: max(0px)) {
+  .container {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Prevent pull-to-refresh on mobile */
+html {
+  overscroll-behavior: none;
+}
+
+/* Disable text selection on game UI elements */
+.action-btn,
+.stat-card,
+.advisor-card {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}

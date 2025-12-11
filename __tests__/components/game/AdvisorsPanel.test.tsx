@@ -20,24 +20,25 @@ describe("AdvisorsPanel", () => {
   it("renders all 3 advisors", () => {
     renderWithProvider();
 
-    expect(screen.getByText(/MemeLord/)).toBeInTheDocument();
-    expect(screen.getByText("Dana Data")).toBeInTheDocument();
-    expect(screen.getByText("Riley Rebel")).toBeInTheDocument();
+    // Use getAllByText since names may appear in quotes too
+    expect(screen.getAllByText(/DOGE/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Dark MAGA/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Tucker's Intern Kyle/).length).toBeGreaterThan(0);
   });
 
   it("renders advisor roles", () => {
     renderWithProvider();
 
-    expect(screen.getByText("Social Media Strategist")).toBeInTheDocument();
-    expect(screen.getByText("Analytics Guru")).toBeInTheDocument();
-    expect(screen.getByText("Grassroots Organizer")).toBeInTheDocument();
+    expect(screen.getByText("Efficiency Consultant")).toBeInTheDocument();
+    expect(screen.getByText("Aesthetic Director")).toBeInTheDocument();
+    expect(screen.getByText("Media Booker")).toBeInTheDocument();
   });
 
   it("renders advisor quotes", () => {
     renderWithProvider();
 
     expect(
-      screen.getByText(/We memed the establishment into oblivion/)
+      screen.getByText(/Vengeance is a brand now/)
     ).toBeInTheDocument();
   });
 });

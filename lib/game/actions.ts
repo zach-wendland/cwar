@@ -6,6 +6,179 @@ import {
   getAdjustedCost,
 } from './politicalFactions';
 
+// ================================
+// ACTION BALANCE CONSTANTS
+// ================================
+
+// Cooldowns: action ID -> number of turns before it can be used again
+export const ACTION_COOLDOWNS: { [actionId: string]: number } = {
+  legal_fund: 3,
+  debate: 2,
+  influencer: 2,
+  platform_hop: 4,
+};
+
+// Diminishing returns: action ID -> { maxStacks, reductionPerStack }
+export const DIMINISHING_RETURNS: { [actionId: string]: { maxStacks: number; reductionPerStack: number } } = {
+  fundraise: { maxStacks: 3, reductionPerStack: 0.25 }, // After 3 uses: 25%, 50%, 75% reduction
+  meme_campaign: { maxStacks: 2, reductionPerStack: 0.2 }, // After 2 uses: 20%, 40% reduction
+};
+
+// Prerequisites: action ID -> function that checks if action can be used
+export const ACTION_PREREQUISITES: { [actionId: string]: (state: GameState) => { canUse: boolean; reason?: string } } = {
+  rally: (state) => {
+    const avgSupport = Object.values(state.support).reduce((a, b) => a + b, 0) / Object.keys(state.support).length;
+    if (avgSupport < 15) {
+      return { canUse: false, reason: 'Need at least 15% average support to organize rallies' };
+    }
+    return { canUse: true };
+  },
+  debate: (state) => {
+    if (state.clout < 30) {
+      return { canUse: false, reason: 'Need at least 30 clout to be taken seriously in debates' };
+    }
+    return { canUse: true };
+  },
+  influencer: (state) => {
+    if (state.turn < 5) {
+      return { canUse: false, reason: 'Influencers won\'t partner until turn 5 (need credibility)' };
+    }
+    return { canUse: true };
+  },
+  bot_army: (state) => {
+    if (state.risk >= 75) {
+      return { canUse: false, reason: 'Too risky! You\'re under too much scrutiny for bot deployment' };
+    }
+    return { canUse: true };
+  },
+};
+
+// Risk zone locked actions: these actions are disabled in CRITICAL risk zone (90+)
+export const RISK_ZONE_LOCKED_ACTIONS = ['bot_army', 'meme_campaign', 'hashtag'];
+
+// ================================
+// ACTION VALIDATION HELPERS
+// ================================
+
+/**
+ * Check if an action is on cooldown
+ */
+export function isActionOnCooldown(
+  actionId: string,
+  cooldowns: { [actionId: string]: number }
+): { onCooldown: boolean; turnsRemaining: number } {
+  const remaining = cooldowns[actionId] || 0;
+  return { onCooldown: remaining > 0, turnsRemaining: remaining };
+}
+
+/**
+ * Get diminishing returns multiplier for an action
+ */
+export function getDiminishingReturnsMultiplier(
+  actionId: string,
+  consecutiveUses: { [actionId: string]: number }
+): number {
+  const config = DIMINISHING_RETURNS[actionId];
+  if (!config) return 1;
+
+  const uses = consecutiveUses[actionId] || 0;
+  if (uses === 0) return 1;
+
+  const effectiveUses = Math.min(uses, config.maxStacks);
+  return Math.max(0.25, 1 - (effectiveUses * config.reductionPerStack));
+}
+
+/**
+ * Check all prerequisites for an action
+ */
+export function checkActionPrerequisites(
+  actionId: string,
+  state: GameState
+): { canUse: boolean; reason?: string } {
+  const prereq = ACTION_PREREQUISITES[actionId];
+  if (!prereq) return { canUse: true };
+  return prereq(state);
+}
+
+/**
+ * Comprehensive action availability check
+ */
+export function canPerformAction(
+  actionId: string,
+  state: GameState,
+  cooldowns: { [actionId: string]: number },
+  consecutiveUses: { [actionId: string]: number }
+): { canPerform: boolean; reason?: string; diminishedMultiplier?: number } {
+  // Check cooldown
+  const cooldownCheck = isActionOnCooldown(actionId, cooldowns);
+  if (cooldownCheck.onCooldown) {
+    return { canPerform: false, reason: `On cooldown (${cooldownCheck.turnsRemaining} turns remaining)` };
+  }
+
+  // Check risk zone lock
+  if (state.risk >= 90 && RISK_ZONE_LOCKED_ACTIONS.includes(actionId)) {
+    return { canPerform: false, reason: 'Action locked in Critical risk zone' };
+  }
+
+  // Check prerequisites
+  const prereqCheck = checkActionPrerequisites(actionId, state);
+  if (!prereqCheck.canUse) {
+    return { canPerform: false, reason: prereqCheck.reason };
+  }
+
+  // Calculate diminishing returns
+  const diminishedMultiplier = getDiminishingReturnsMultiplier(actionId, consecutiveUses);
+
+  return { canPerform: true, diminishedMultiplier };
+}
+
+/**
+ * Update cooldowns after a turn (decrement all by 1)
+ */
+export function tickCooldowns(cooldowns: { [actionId: string]: number }): { [actionId: string]: number } {
+  const updated: { [actionId: string]: number } = {};
+  for (const [actionId, turns] of Object.entries(cooldowns)) {
+    if (turns > 0) {
+      updated[actionId] = turns - 1;
+    }
+  }
+  return updated;
+}
+
+/**
+ * Set cooldown for an action after use
+ */
+export function setActionCooldown(
+  actionId: string,
+  cooldowns: { [actionId: string]: number }
+): { [actionId: string]: number } {
+  const cooldownTurns = ACTION_COOLDOWNS[actionId];
+  if (!cooldownTurns) return cooldowns;
+  return { ...cooldowns, [actionId]: cooldownTurns };
+}
+
+/**
+ * Update consecutive use tracking
+ */
+export function updateConsecutiveUses(
+  actionId: string,
+  consecutiveUses: { [actionId: string]: number }
+): { [actionId: string]: number } {
+  // Increment uses for this action
+  const updated = { ...consecutiveUses };
+  updated[actionId] = (updated[actionId] || 0) + 1;
+
+  // Reset other actions with diminishing returns tracking
+  for (const trackedAction of Object.keys(DIMINISHING_RETURNS)) {
+    if (trackedAction !== actionId && updated[trackedAction]) {
+      // Decay by 1 per turn instead of instant reset
+      updated[trackedAction] = Math.max(0, updated[trackedAction] - 1);
+    }
+  }
+
+  return updated;
+}
+
 // Schema for an action definition
 export interface GameActionConfig {
   id: string;
@@ -152,27 +325,28 @@ function getRandomStates(support: { [key: string]: number }, count: number): str
   return selected;
 }
 
-// List of playable actions
+// List of playable actions - REBALANCED for strategic depth
 export const actionsConfig: GameActionConfig[] = [
   // =====================
-  // ORIGINAL 4 ACTIONS
+  // CORE ACTIONS (Always available)
   // =====================
   {
     id: 'meme_campaign',
     name: 'Launch Meme Campaign',
-    description: 'Spend clout to create a viral meme campaign that boosts your support base online.',
-    cost: { clout: 10 },
+    description: 'Create viral memes. Subject to diminishing returns if spammed.',
+    cost: { clout: 12 },
     perform: (state: GameState) => {
+      // Target 3 random states, but with faction awareness
       const supportDelta: { [state: string]: number } = {};
       const states = Object.keys(state.support);
       for (let i = 0; i < 3; i++) {
         const randState = states[Math.floor(Math.random() * states.length)];
-        supportDelta[randState] = (supportDelta[randState] || 0) + 5;
+        supportDelta[randState] = (supportDelta[randState] || 0) + 6;
       }
       return {
         supportDelta,
-        riskDelta: 5,
-        cloutDelta: 5,
+        riskDelta: 6, // Increased from 5
+        cloutDelta: 3, // Reduced from 5
         message: 'Your meme campaign goes viral, boosting support in several states!'
       };
     }
@@ -180,177 +354,188 @@ export const actionsConfig: GameActionConfig[] = [
   {
     id: 'fundraise',
     name: 'Fundraise',
-    description: 'Raise funds from supporters through online crowdfunding.',
-    cost: {},
+    description: 'Crowdfund from supporters. Returns diminish with overuse.',
+    cost: {}, // Still free, but has diminishing returns
     perform: (state: GameState) => {
+      // Base return, will be modified by diminishing returns system
       return {
-        fundsDelta: 50,
-        riskDelta: 2,
-        message: 'You held a successful fundraiser and gained $50k in donations.'
+        fundsDelta: 40, // Reduced from 50
+        riskDelta: 5, // Increased from 2
+        message: 'Fundraiser complete! Donations collected, but your visibility increased.'
       };
     }
   },
   {
     id: 'rally',
     name: 'Organize Rally',
-    description: 'Spend funds to organize a rally in a target region to boost local support.',
-    cost: { funds: 30 },
+    description: 'Hold a rally in your weakest state. Requires 15% avg support.',
+    cost: { funds: 35 }, // Increased from 30
     perform: (state: GameState) => {
-      let lowestState: string | null = null;
-      let minSupport = 101;
-      for (const s in state.support) {
-        if (state.support[s] < minSupport) {
-          minSupport = state.support[s];
-          lowestState = s;
-        }
-      }
+      // Find the 3 lowest states and boost them
+      const sortedStates = Object.entries(state.support)
+        .sort(([, a], [, b]) => a - b)
+        .slice(0, 3);
+
       const supportDelta: { [state: string]: number } = {};
-      if (lowestState) {
-        supportDelta[lowestState] = 10;
-      }
+      sortedStates.forEach(([code], index) => {
+        // More boost to the lowest, less to others
+        supportDelta[code] = 12 - (index * 2); // 12, 10, 8
+      });
+
+      const targetStates = sortedStates.map(([code]) => code).join(', ');
       return {
         supportDelta,
-        riskDelta: 3,
-        message: `A rally is held in ${lowestState}, giving a boost to support there.`
+        riskDelta: 4, // Increased from 3
+        message: `Rally tour through ${targetStates}! Ground game strengthened.`
       };
     }
   },
   {
     id: 'bot_army',
     name: 'Deploy Bot Army',
-    description: 'Secretly deploy a bot army to spread propaganda (high risk, high reward).',
-    cost: { funds: 20, clout: 5 },
+    description: 'Risky propaganda bots. Locked above 75% risk. Angers Tech & Moderates.',
+    cost: { funds: 25, clout: 8 }, // Increased costs
     perform: (state: GameState) => {
       return {
-        supportDelta: { 'ALL': 3 },
-        riskDelta: 15,
-        message: 'Bot army deployed nationwide, boosting influence everywhere (but greatly increasing exposure risk).'
+        supportDelta: { 'ALL': 4 }, // Increased from 3
+        riskDelta: 10, // Reduced from 15 (more usable, but still risky)
+        message: 'Bot army deployed! Support rises but you\'re attracting attention.'
       };
     }
   },
 
   // =====================
-  // NEW ACTIONS
+  // MEDIA & INFLUENCE ACTIONS
   // =====================
   {
     id: 'podcast',
     name: 'Podcast Appearance',
-    description: 'Appear on a popular podcast to build credibility and reach new audiences.',
-    cost: { funds: 15 },
+    description: 'Build credibility on popular shows. Safe, steady gains.',
+    cost: { funds: 20 }, // Increased from 15
     perform: (state: GameState) => {
       return {
-        cloutDelta: 12,
+        cloutDelta: 10, // Reduced from 12
         riskDelta: 2,
-        supportDelta: { 'ALL': 1 },
-        message: 'Your podcast appearance was well-received! Clout boosted with minimal risk.'
+        supportDelta: { 'ALL': 2 }, // Increased from 1
+        message: 'Podcast appearance well-received! Building mainstream credibility.'
       };
     }
   },
   {
     id: 'hashtag',
     name: 'Coordinate Hashtag',
-    description: 'Coordinate followers to trend a hashtag targeting specific regions.',
-    cost: { clout: 8 },
+    description: 'Trend a hashtag in 2 states. Locked in Critical risk zone.',
+    cost: { clout: 10 }, // Increased from 8
     perform: (state: GameState) => {
-      // Boost 2 random states significantly
       const targetStates = getRandomStates(state.support, 2);
       const supportDelta: { [state: string]: number } = {};
       targetStates.forEach(s => {
-        supportDelta[s] = 12;
+        supportDelta[s] = 10; // Reduced from 12
       });
       return {
         supportDelta,
-        riskDelta: 4,
-        cloutDelta: 3,
-        message: `#YourMovement trends in ${targetStates.join(' and ')}! Significant support boost in those regions.`
+        riskDelta: 5, // Increased from 4
+        cloutDelta: 2, // Reduced from 3
+        message: `#YourMovement trends in ${targetStates.join(' and ')}!`
       };
     }
   },
   {
     id: 'debate',
     name: 'Debate Challenge',
-    description: 'Challenge critics to a public debate. High risk, but potentially huge rewards.',
-    cost: { funds: 25, clout: 10 },
+    description: 'High-stakes debate. Requires 30 clout. 40% success rate. 2-turn cooldown.',
+    cost: { funds: 30, clout: 15 }, // Increased costs
     perform: (state: GameState) => {
-      // Random outcome - debates can go either way
-      const success = Math.random() > 0.4; // 60% success rate
+      // Success rate now 40% (was 60%), but scales with clout
+      const cloutBonus = Math.min(state.clout / 200, 0.2); // Up to +20% at 200 clout
+      const successRate = 0.4 + cloutBonus;
+      const success = Math.random() < successRate;
+
       if (success) {
         return {
-          supportDelta: { 'ALL': 6 },
-          cloutDelta: 25,
-          riskDelta: 8,
-          message: 'You dominated the debate! Clips go viral and support surges nationwide.'
+          supportDelta: { 'ALL': 5 }, // Reduced from 6
+          cloutDelta: 20, // Reduced from 25
+          riskDelta: 6, // Reduced from 8
+          message: `Debate victory! (${Math.round(successRate * 100)}% chance succeeded)`
         };
       } else {
         return {
-          supportDelta: { 'ALL': -2 },
-          cloutDelta: -5,
-          riskDelta: 12,
-          message: 'The debate didn\'t go as planned. Your opponent scored some points.'
+          supportDelta: { 'ALL': -3 }, // Increased penalty from -2
+          cloutDelta: -10, // Increased penalty from -5
+          riskDelta: 10, // Reduced from 12
+          message: `Debate loss. Your opponent had good talking points.`
         };
       }
     }
   },
+
+  // =====================
+  // GRASSROOTS ACTIONS
+  // =====================
   {
     id: 'canvass',
     name: 'Grassroots Canvassing',
-    description: 'Deploy volunteers for door-to-door outreach. Slow but steady gains.',
-    cost: { funds: 40 },
+    description: 'Door-to-door outreach in 5 states. Low risk, steady progress.',
+    cost: { funds: 45 }, // Increased from 40
     perform: (state: GameState) => {
-      // Boost 5 random states modestly
       const targetStates = getRandomStates(state.support, 5);
       const supportDelta: { [state: string]: number } = {};
       targetStates.forEach(s => {
-        supportDelta[s] = 6;
+        supportDelta[s] = 5; // Reduced from 6
       });
       return {
         supportDelta,
         riskDelta: 1,
-        message: `Grassroots canvassing completed in ${targetStates.length} states. Steady progress made.`
+        cloutDelta: 2, // Added small clout gain
+        message: `Canvassing in ${targetStates.length} states. Building real connections.`
       };
     }
   },
+
+  // =====================
+  // HIGH-COST ACTIONS (Gated)
+  // =====================
   {
     id: 'influencer',
     name: 'Influencer Partnership',
-    description: 'Partner with major influencers to reach new demographics.',
-    cost: { funds: 50, clout: 15 },
+    description: 'Partner with major influencers. Available from turn 5. 2-turn cooldown.',
+    cost: { funds: 60, clout: 20 }, // Increased from 50/15
     perform: (state: GameState) => {
       return {
-        supportDelta: { 'ALL': 5 },
-        cloutDelta: 20,
-        riskDelta: 6,
-        message: 'Influencer collaboration was a hit! Your message reached millions of new people.'
+        supportDelta: { 'ALL': 4 }, // Reduced from 5
+        cloutDelta: 15, // Reduced from 20
+        riskDelta: 5, // Reduced from 6
+        message: 'Influencer collab successful! Millions reached.'
       };
     }
   },
   {
     id: 'legal_fund',
     name: 'Legal Defense Fund',
-    description: 'Invest in legal protection to reduce your exposure and risk.',
-    cost: { funds: 80 },
+    description: 'Hire lawyers to reduce risk by 15. $150 cost. 3-turn cooldown.',
+    cost: { funds: 150 }, // Increased from 80
     perform: (state: GameState) => {
-      const riskReduction = Math.min(state.risk, 20); // Can't go below 0
+      const riskReduction = Math.min(state.risk, 15); // Reduced from 20
       return {
         riskDelta: -riskReduction,
-        cloutDelta: 5,
-        message: `Legal team engaged! Risk reduced by ${riskReduction} points. You\'re better protected now.`
+        cloutDelta: 3, // Reduced from 5
+        message: `Legal team engaged! Risk reduced by ${riskReduction}.`
       };
     }
   },
   {
     id: 'platform_hop',
     name: 'Platform Migration',
-    description: 'Migrate to a new platform to reduce dependency and risk, but lose some support.',
-    cost: { clout: 20 },
+    description: 'Move to a new platform. -25% risk but lose 4% support. 4-turn cooldown.',
+    cost: { clout: 25 }, // Increased from 20
     perform: (state: GameState) => {
       const currentRisk = state.risk;
-      const riskReduction = Math.floor(currentRisk * 0.4); // Reduce risk by 40%
+      const riskReduction = Math.floor(currentRisk * 0.25); // Reduced from 40%
       return {
-        supportDelta: { 'ALL': -3 },
+        supportDelta: { 'ALL': -4 }, // Increased penalty from -3
         riskDelta: -riskReduction,
-        cloutDelta: 10,
-        message: `Platform migration complete! Risk reduced by ${riskReduction} but lost some casual followers.`
+        cloutDelta: 5, // Reduced from 10
+        message: `Migration complete! Risk -${riskReduction}, but lost some followers.`
       };
     }
   }

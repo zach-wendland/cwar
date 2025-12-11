@@ -37,19 +37,19 @@ describe("ActionPanel", () => {
     renderWithProvider();
 
     expect(
-      screen.getByText(/Spend clout to create a viral meme campaign/)
+      screen.getByText(/Create viral memes/)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Raise funds from supporters/)
+      screen.getByText(/Crowdfund from supporters/)
     ).toBeInTheDocument();
   });
 
   it("displays cost information for actions", () => {
     renderWithProvider();
 
-    // Meme campaign costs 10 clout
-    expect(screen.getAllByText("10").length).toBeGreaterThan(0);
-    // Rally costs 30 funds
-    expect(screen.getAllByText("30").length).toBeGreaterThan(0);
+    // Meme campaign costs 12 clout (rebalanced)
+    expect(screen.getAllByText("12").length).toBeGreaterThan(0);
+    // Rally costs 35 funds (rebalanced)
+    expect(screen.getAllByText("35").length).toBeGreaterThan(0);
   });
 });

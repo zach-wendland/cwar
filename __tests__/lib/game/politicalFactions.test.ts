@@ -195,7 +195,8 @@ describe('Political Factions', () => {
     });
 
     it('should return contested when within 5 points', () => {
-      const support: TerritorySupport = { maga: 40, america_first: 35, liberal: 25 };
+      // maga leads by 4 over america_first (39-35=4), which is < 5 margin
+      const support: TerritorySupport = { maga: 39, america_first: 35, liberal: 25 };
       expect(getStateController(support)).toBe('contested');
     });
   });
@@ -203,9 +204,9 @@ describe('Political Factions', () => {
   describe('Count Controlled States', () => {
     it('should count states correctly', () => {
       const territories: Record<string, TerritorySupport> = {
-        TX: { maga: 60, america_first: 20, liberal: 20 },
-        CA: { maga: 20, america_first: 20, liberal: 60 },
-        PA: { maga: 30, america_first: 30, liberal: 40 }, // Contested
+        TX: { maga: 60, america_first: 20, liberal: 20 }, // maga controls (+40 margin)
+        CA: { maga: 20, america_first: 20, liberal: 60 }, // liberal controls (+40 margin)
+        PA: { maga: 34, america_first: 33, liberal: 33 }, // contested (<5 margin)
       };
 
       const counts = countControlledStates(territories);
@@ -253,8 +254,10 @@ describe('Political Factions', () => {
 
     it('should not trigger victory with insufficient support', () => {
       const territories: Record<string, TerritorySupport> = {};
+      // Create states where MAGA doesn't have clear control (contested)
+      // and average support is below threshold (60%)
       for (let i = 0; i < 50; i++) {
-        territories[`S${i}`] = { maga: 40, america_first: 30, liberal: 30 };
+        territories[`S${i}`] = { maga: 35, america_first: 33, liberal: 32 }; // contested (margin < 5)
       }
 
       const victory = checkVictoryCondition('maga', territories, 100);

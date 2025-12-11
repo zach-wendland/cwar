@@ -25,10 +25,10 @@ describe("generators", () => {
       });
     });
 
-    it("should include MemeLord advisor", () => {
+    it("should include DOGE advisor", () => {
       const advisors = generateAdvisors();
-      const memeLord = advisors.find((a) => a.name.includes("MemeLord"));
-      expect(memeLord).toBeDefined();
+      const dogeAdvisor = advisors.find((a) => a.name.includes("DOGE"));
+      expect(dogeAdvisor).toBeDefined();
     });
   });
 
@@ -45,12 +45,27 @@ describe("generators", () => {
       pendingEvent: undefined,
       victory: false,
       gameOver: false,
+      victoryType: undefined,
+      defeatType: undefined,
       streak: 0,
       highestStreak: 0,
       lastActionWasCritical: false,
       totalCriticalHits: 0,
       sessionFirstAction: true,
       achievementsUnlocked: [],
+      factionSupport: {
+        tech_workers: 50,
+        rural_voters: 50,
+        young_activists: 50,
+        moderates: 50,
+        business_class: 50,
+      },
+      actionCooldowns: {},
+      consecutiveActionUses: {},
+      totalFundsEarned: 0,
+      totalCloutEarned: 0,
+      consecutiveNegativeFunds: 0,
+      previousRiskZone: 'SAFE',
     };
 
     it("should return an event with title and description", () => {

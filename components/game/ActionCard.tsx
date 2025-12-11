@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, DollarSign, Lock, Sparkles } from "lucide-react";
+import { Zap, DollarSign, Lock, Sparkles, Clock, TrendingDown } from "lucide-react";
 
 interface ActionCardProps {
   id: string;
@@ -12,6 +12,9 @@ interface ActionCardProps {
   disabled: boolean;
   onClick: () => void;
   isCriticalHit?: boolean;
+  cooldownTurns?: number;
+  disabledReason?: string;
+  diminishedMultiplier?: number;
 }
 
 const ActionCard: React.FC<ActionCardProps> = ({
@@ -22,6 +25,9 @@ const ActionCard: React.FC<ActionCardProps> = ({
   disabled,
   onClick,
   isCriticalHit = false,
+  cooldownTurns = 0,
+  disabledReason,
+  diminishedMultiplier = 1,
 }) => {
   const [isPressed, setIsPressed] = useState(false);
   const [showRipple, setShowRipple] = useState(false);
@@ -76,7 +82,13 @@ const ActionCard: React.FC<ActionCardProps> = ({
       <div className="action-btn__content">
         <div className="action-btn__header">
           <strong className="action-btn__name">{name}</strong>
-          {disabled && <Lock size={14} className="action-btn__lock" />}
+          {cooldownTurns > 0 && (
+            <span className="cooldown-badge flex items-center gap-0.5 text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+              <Clock size={10} />
+              {cooldownTurns}
+            </span>
+          )}
+          {disabled && !cooldownTurns && <Lock size={14} className="action-btn__lock" />}
           {isCriticalHit && (
             <motion.span
               className="critical-badge"
@@ -88,6 +100,20 @@ const ActionCard: React.FC<ActionCardProps> = ({
           )}
         </div>
         <p className="action-btn__description">{description}</p>
+
+        {/* Disabled reason tooltip */}
+        {disabled && disabledReason && (
+          <p className="text-xs text-red-400/80 mt-1 italic">{disabledReason}</p>
+        )}
+
+        {/* Diminishing returns warning */}
+        {!disabled && diminishedMultiplier < 1 && (
+          <p className="text-xs text-yellow-400/80 mt-1 flex items-center gap-1">
+            <TrendingDown size={10} />
+            {Math.round((1 - diminishedMultiplier) * 100)}% reduced effectiveness
+          </p>
+        )}
+
         {hasCost && (
           <div className="action-btn__cost">
             {cost?.funds && (

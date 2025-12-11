@@ -34,6 +34,9 @@ import {
   useFloatingNumbers,
 } from "./game/FloatingNumbers";
 import { ParticleSystem, useParticles } from "./game/ParticleSystem";
+import CollapsibleStatsBar from "./game/CollapsibleStatsBar";
+import BottomSheet from "./game/BottomSheet";
+import { Users } from "lucide-react";
 
 const GameApp: React.FC = () => {
   const { state, dispatch } = useGameContext();
@@ -181,9 +184,9 @@ const GameApp: React.FC = () => {
         onStart={() => dispatch({ type: "RESET_GAME" })}
       />
 
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-4 pb-20 lg:pb-4">
         {/* Header Buttons */}
-        <div className="flex justify-end gap-3 mb-2">
+        <div className="flex justify-end gap-2 sm:gap-3 mb-2">
           {/* Daily Challenge Indicator */}
           <DailyChallengeIndicator
             onClick={() => setChallengePanelOpen(true)}
@@ -192,18 +195,18 @@ const GameApp: React.FC = () => {
           {/* Daily Challenge Button */}
           <motion.button
             onClick={() => setChallengePanelOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 border border-purple-500/50 rounded-lg text-purple-400 hover:bg-purple-500/30 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-purple-500/20 border border-purple-500/50 rounded-lg text-purple-400 hover:bg-purple-500/30 transition-colors min-h-[44px]"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
             <Calendar size={18} />
-            <span className="font-medium">Daily</span>
+            <span className="font-medium hidden sm:inline">Daily</span>
           </motion.button>
 
           {/* Legacy Points Button */}
           <motion.button
             onClick={() => setPrestigePanelOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg text-yellow-400 hover:bg-yellow-500/30 transition-colors min-h-[44px]"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -215,9 +218,24 @@ const GameApp: React.FC = () => {
 
         <IntroTutorial />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Mobile Collapsible Stats Bar */}
+        <CollapsibleStatsBar
+          turn={state.turn}
+          clout={state.clout}
+          funds={state.funds}
+          risk={state.risk}
+          avgSupport={Math.round(
+            Object.values(state.support).reduce((a, b) => a + b, 0) /
+              Object.keys(state.support).length
+          )}
+          streak={state.streak}
+        />
+
+        {/* Desktop 3-column layout / Mobile stack */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left column: Map view */}
           <motion.div
+            className="order-1 lg:order-1"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
@@ -225,8 +243,9 @@ const GameApp: React.FC = () => {
             <MapView />
           </motion.div>
 
-          {/* Center column: Event feed and stats */}
+          {/* Center column: Event feed and stats (hidden on mobile, shown in desktop) */}
           <motion.div
+            className="order-3 lg:order-2 hidden lg:block"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -234,19 +253,45 @@ const GameApp: React.FC = () => {
             <EventFeed />
           </motion.div>
 
-          {/* Right column: Actions and Advisors */}
+          {/* Right column: Actions (priority on mobile) */}
           <motion.div
+            className="order-2 lg:order-3"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
           >
             <ActionPanel />
-            <AdvisorsPanel />
-            <div className="mt-4">
-              <FactionPanel />
+            {/* Desktop only: Advisors and Factions inline */}
+            <div className="hidden lg:block">
+              <AdvisorsPanel />
+              <div className="mt-4">
+                <FactionPanel />
+              </div>
             </div>
           </motion.div>
+
+          {/* Mobile only: Event feed below actions */}
+          <motion.div
+            className="order-4 lg:hidden"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <EventFeed />
+          </motion.div>
         </div>
+
+        {/* Mobile Bottom Sheet for Advisors & Factions */}
+        <BottomSheet
+          title="Advisors & Factions"
+          icon={<Users size={18} className="text-cyan-400" />}
+          peekHeight={56}
+        >
+          <div className="space-y-4">
+            <AdvisorsPanel />
+            <FactionPanel />
+          </div>
+        </BottomSheet>
       </div>
 
       {/* Event Modal */}
