@@ -1,6 +1,9 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import { gameRouter } from "./routes/game";
+import { ghostRouter } from "./routes/ghost";
+import { matchmakingRouter } from "./routes/matchmaking";
+import { leaguesRouter } from "./routes/leagues";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +19,11 @@ app.get("/api/health", (req: Request, res: Response) => {
 
 // Game routes
 app.use("/api/game", gameRouter);
+
+// Multiplayer routes
+app.use("/api/ghost", ghostRouter);
+app.use("/api/multiplayer", matchmakingRouter);
+app.use("/api/leagues", leaguesRouter);
 
 // Error handling
 app.use((err: Error, req: Request, res: Response, next: Function) => {
