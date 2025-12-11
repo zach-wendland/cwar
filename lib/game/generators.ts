@@ -1156,14 +1156,25 @@ export function generateAdvisors(): Advisor[] {
   ];
 }
 
+// Fallback event when no eligible events are available
+const FALLBACK_EVENT: GameEvent = {
+  title: 'Quiet News Day',
+  description: 'The news cycle takes a breather. Use this time to consolidate your position.',
+  outcome: {},
+};
+
 // Generate a satirical in-game event based on game state
-export function generateEvent(state: GameState): GameEvent {
+export function generateEvent(state: GameState, _recursionGuard: boolean = false): GameEvent {
   const eligibleEvents = getEligibleEvents(state);
 
-  // If no eligible events, reset shown events and try again
+  // If no eligible events, reset shown events and try once more
   if (eligibleEvents.length === 0) {
+    if (_recursionGuard) {
+      // Already tried resetting, return fallback event
+      return FALLBACK_EVENT;
+    }
     shownEventIds.clear();
-    return generateEvent(state);
+    return generateEvent(state, true);
   }
 
   // Weight selection toward events matching current game state

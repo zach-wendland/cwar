@@ -117,6 +117,7 @@ export interface GameState {
 type GameAction =
   | { type: 'PERFORM_ACTION'; actionId: string }
   | { type: 'SPIN_ACTION'; spinResult: SpinResult; comboResult: ComboResult | null }
+  | { type: 'REROLL_SPIN'; cost: number }
   | { type: 'RESOLVE_EVENT'; optionIndex: number }
   | { type: 'RESET_GAME' }
   | { type: 'CLEAR_CRITICAL_FLAG' };
@@ -816,6 +817,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       return newState;
+    }
+
+    case 'REROLL_SPIN': {
+      // Deduct clout cost for rerolling (locking reels and spinning again)
+      const { cost } = action;
+      if (state.clout < cost) {
+        return { ...state, newsLog: [...state.newsLog, `Not enough clout for reroll (need ${cost})`] };
+      }
+      return {
+        ...state,
+        clout: state.clout - cost,
+        newsLog: [...state.newsLog, `Reroll! -${cost} clout`],
+      };
     }
 
     case 'RESOLVE_EVENT': {

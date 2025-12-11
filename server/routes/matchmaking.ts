@@ -16,6 +16,18 @@ import {
 export const matchmakingRouter = express.Router();
 
 // ================================
+// TIER RANKING (for promotion/demotion logic)
+// ================================
+
+const TIER_RANK: Record<string, number> = {
+  BRONZE: 0,
+  SILVER: 1,
+  GOLD: 2,
+  DIAMOND: 3,
+  LEGEND: 4,
+};
+
+// ================================
 // FIND OPPONENT
 // ================================
 
@@ -24,7 +36,7 @@ interface FindOpponentRequest {
   playerElo?: number;
 }
 
-ghostRouter.post('/find-opponent', (req: Request, res: Response) => {
+matchmakingRouter.post('/find-opponent', (req: Request, res: Response) => {
   try {
     const { playerId, playerElo: requestedElo }: FindOpponentRequest = req.body;
 
@@ -109,11 +121,10 @@ matchmakingRouter.post('/report-result', (req: Request, res: Response) => {
     const leagueBefore = getLeagueInfo(playerEloBefore, 0);
     const leagueAfter = getLeagueInfo(playerEloAfter, 0);
 
-    // Check for promotion/demotion
-    const promoted = leagueAfter.tier !== leagueBefore.tier &&
-      Object.keys({ BRONZE: 0, SILVER: 1, GOLD: 2, DIAMOND: 3, LEGEND: 4 })[leagueAfter.tier] >
-      Object.keys({ BRONZE: 0, SILVER: 1, GOLD: 2, DIAMOND: 3, LEGEND: 4 })[leagueBefore.tier];
-    const demoted = leagueAfter.tier !== leagueBefore.tier && !promoted;
+    // Check for promotion/demotion using tier rank mapping
+    const tierChanged = leagueAfter.tier !== leagueBefore.tier;
+    const promoted = tierChanged && TIER_RANK[leagueAfter.tier] > TIER_RANK[leagueBefore.tier];
+    const demoted = tierChanged && TIER_RANK[leagueAfter.tier] < TIER_RANK[leagueBefore.tier];
 
     // Create match result
     const matchResult: MatchResult = {
@@ -226,6 +237,3 @@ function calculateBestStreak(history: MatchResult[]): number {
 
   return best;
 }
-
-// Export for use in ghost.ts
-export const ghostRouter = matchmakingRouter;

@@ -160,6 +160,12 @@ const SpinWheel: React.FC = () => {
   const handleSpin = useCallback(() => {
     if (isSpinning) return;
 
+    // Deduct reroll cost if this is a reroll (before spinning)
+    const isReroll = spinState.currentSpin !== null;
+    if (isReroll && rerollCost > 0) {
+      dispatch({ type: "REROLL_SPIN", cost: rerollCost });
+    }
+
     setIsSpinning(true);
     setShowCombo(false);
 
@@ -182,12 +188,7 @@ const SpinWheel: React.FC = () => {
         setTimeout(() => setShowCombo(false), 2000);
       }
     }, 600);
-
-    // Deduct reroll cost if this is a reroll
-    if (spinState.currentSpin && rerollCost > 0) {
-      // Note: Cost deduction happens in reducer, this is just UI state
-    }
-  }, [isSpinning, state, spinState, rerollCost]);
+  }, [isSpinning, state, spinState, rerollCost, dispatch]);
 
   const handleToggleLock = useCallback((reel: "action" | "modifier" | "target") => {
     setSpinState((prev) => ({
