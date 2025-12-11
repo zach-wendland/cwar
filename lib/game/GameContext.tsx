@@ -15,6 +15,23 @@ import { loadPrestigeData, getStartingBonuses, getActiveEffects } from './presti
 import { applyAdvisorBonus, getActionDiscount, getCriticalBonus } from './advisorAbilities';
 import { SpinResult, getSpinCost, resolveSpinOutcome } from './spinSystem';
 import { ComboResult, calculateComboMultiplier } from './comboEngine';
+import {
+  SentimentState,
+  FactionReaction,
+  initializeSentimentState,
+  processSpinSentiment,
+  applySentimentDecay,
+  generateSentimentWarnings,
+  checkSentimentEvents,
+} from './sentimentEngine';
+import {
+  applySentimentToSupportChange,
+  getHostileFactionRiskPenalty,
+  getSentimentCostMultiplier,
+  getSentimentCritBonus,
+  checkForSabotage,
+  checkForFactionBonus,
+} from './moodEffects';
 
 // Define interfaces for game state and related entities
 export interface Advisor {
@@ -111,6 +128,9 @@ export interface GameState {
   consecutiveNegativeFunds: number;
   // Last risk zone for warning triggers
   previousRiskZone: RiskZone;
+  // Sentiment engine
+  sentiment: SentimentState;
+  recentReactions: FactionReaction[];
 }
 
 // Actions for the reducer
@@ -191,6 +211,9 @@ function createInitialState(): GameState {
     totalCloutEarned: 0,
     consecutiveNegativeFunds: 0,
     previousRiskZone: 'SAFE',
+    // Sentiment engine
+    sentiment: initializeSentimentState(),
+    recentReactions: [],
   };
 }
 
@@ -758,6 +781,77 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Generate social media reactions
       const tweets = generateTweets(spinResult.action.name);
       newState.socialFeed = [...state.socialFeed, ...tweets];
+
+      // Process sentiment reactions
+      const { newSentiment, reactions } = processSpinSentiment(
+        state.sentiment,
+        spinResult,
+        finalComboResult.multiplier,
+        newTurn
+      );
+      newState.sentiment = applySentimentDecay(newSentiment, newTurn);
+      newState.recentReactions = [...reactions, ...state.recentReactions].slice(0, 10);
+
+      // Log significant sentiment changes
+      for (const reaction of reactions) {
+        if (reaction.moodChange) {
+          newState.newsLog.push(reaction.message);
+        }
+      }
+
+      // Add sentiment warnings
+      const warnings = generateSentimentWarnings(newState.sentiment);
+      for (const warning of warnings.slice(0, 2)) {
+        if (Math.random() < 0.3) {
+          newState.newsLog.push(warning);
+        }
+      }
+
+      // Check for sabotage events from hostile factions
+      const sabotage = checkForSabotage(newState.sentiment);
+      if (sabotage) {
+        newState.newsLog.push(`💥 ${sabotage.title}: ${sabotage.description}`);
+        if (sabotage.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + sabotage.outcome.riskDelta);
+        if (sabotage.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + sabotage.outcome.cloutDelta);
+        if (sabotage.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + sabotage.outcome.fundsDelta);
+        if (sabotage.outcome.supportDelta?.random) {
+          const randomState = getRandomStateCode(newState.support);
+          newState.support[randomState] = Math.max(0, newState.support[randomState] + sabotage.outcome.supportDelta.random);
+        }
+      }
+
+      // Check for bonus events from enthusiastic factions
+      const bonus = checkForFactionBonus(newState.sentiment);
+      if (bonus) {
+        newState.newsLog.push(`🎉 ${bonus.title}: ${bonus.description}`);
+        if (bonus.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + bonus.outcome.cloutDelta);
+        if (bonus.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + bonus.outcome.fundsDelta);
+        if (bonus.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + bonus.outcome.riskDelta);
+        if (bonus.outcome.supportDelta) {
+          for (const [region, delta] of Object.entries(bonus.outcome.supportDelta)) {
+            if (region === 'random') {
+              const randomState = getRandomStateCode(newState.support);
+              newState.support[randomState] = Math.min(100, newState.support[randomState] + (delta as number));
+            } else if (region === 'midwest') {
+              // Boost midwest states
+              const midwestStates = ['ND', 'SD', 'NE', 'KS', 'MN', 'IA', 'MO', 'WI', 'IL', 'MI', 'IN', 'OH'];
+              for (const st of midwestStates) {
+                if (newState.support[st] !== undefined) {
+                  newState.support[st] = Math.min(100, newState.support[st] + (delta as number));
+                }
+              }
+            } else if (region === 'coastal') {
+              // Boost coastal states
+              const coastalStates = ['CA', 'OR', 'WA', 'NY', 'MA', 'CT', 'NJ', 'MD', 'VA', 'FL'];
+              for (const st of coastalStates) {
+                if (newState.support[st] !== undefined) {
+                  newState.support[st] = Math.min(100, newState.support[st] + (delta as number));
+                }
+              }
+            }
+          }
+        }
+      }
 
       // Possibly trigger a dynamic event
       let event: GameEvent | null = null;
