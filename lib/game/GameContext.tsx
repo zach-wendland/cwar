@@ -13,6 +13,8 @@ import {
 import { factions, initializeFactionSupport, calculateFactionEffect } from './factions';
 import { loadPrestigeData, getStartingBonuses, getActiveEffects } from './prestige';
 import { applyAdvisorBonus, getActionDiscount, getCriticalBonus } from './advisorAbilities';
+import { SpinResult, getSpinCost, resolveSpinOutcome } from './spinSystem';
+import { ComboResult, calculateComboMultiplier } from './comboEngine';
 
 // Define interfaces for game state and related entities
 export interface Advisor {
@@ -114,6 +116,7 @@ export interface GameState {
 // Actions for the reducer
 type GameAction =
   | { type: 'PERFORM_ACTION'; actionId: string }
+  | { type: 'SPIN_ACTION'; spinResult: SpinResult; comboResult: ComboResult | null }
   | { type: 'RESOLVE_EVENT'; optionIndex: number }
   | { type: 'RESET_GAME' }
   | { type: 'CLEAR_CRITICAL_FLAG' };
@@ -557,6 +560,254 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       // Check defeat conditions (multiple paths to lose)
+      const defeatType = checkDefeatConditions(newState);
+      if (defeatType) {
+        newState.gameOver = true;
+        newState.defeatType = defeatType;
+        newState.newsLog.push(getDefeatMessage(defeatType));
+      }
+
+      return newState;
+    }
+
+    case 'SPIN_ACTION': {
+      // New spin-based action system
+      const { spinResult, comboResult } = action;
+
+      if (state.pendingEvent) {
+        return state;
+      }
+
+      // Calculate costs from spin
+      const spinCost = getSpinCost(spinResult);
+
+      // Check resource costs
+      if (spinCost.funds > 0 && state.funds < spinCost.funds) {
+        return { ...state, newsLog: [...state.newsLog, `Not enough funds (need $${spinCost.funds})`] };
+      }
+      if (spinCost.clout > 0 && state.clout < spinCost.clout) {
+        return { ...state, newsLog: [...state.newsLog, `Not enough clout (need ${spinCost.clout})`] };
+      }
+
+      // Get advisor names for ability calculations
+      const advisorNames = state.advisors.map(a => a.name);
+
+      // Check for critical hit
+      const critBonus = getCriticalBonus(advisorNames);
+      const isCriticalHit = Math.random() < (CRITICAL_HIT_CHANCE + critBonus / 100);
+
+      // Calculate combo result if not provided
+      const finalComboResult = comboResult || calculateComboMultiplier(
+        spinResult.action,
+        spinResult.modifier,
+        spinResult.target
+      );
+
+      // Resolve spin outcome
+      let outcome = resolveSpinOutcome(spinResult, state, finalComboResult);
+
+      // Apply critical hit multiplier on top of combo
+      if (isCriticalHit) {
+        outcome = applyOutcomeWithMultiplier(outcome, 2);
+      }
+
+      // Apply session first action bonus
+      const sessionMultiplier = state.sessionFirstAction ? 1.5 : 1;
+      if (!isCriticalHit && sessionMultiplier > 1) {
+        outcome = applyOutcomeWithMultiplier(outcome, sessionMultiplier);
+      }
+
+      // Deduct costs
+      let newFunds = state.funds - spinCost.funds;
+      let newClout = state.clout - spinCost.clout;
+
+      // Apply outcome to state
+      const newSupport = { ...state.support };
+      const newFactionSupport = { ...state.factionSupport };
+
+      // Calculate faction effects for spin actions
+      const baseSupportChange = outcome.supportDelta?.['ALL'] || 0;
+      const factionEffects = baseSupportChange !== 0
+        ? calculateFactionEffect(spinResult.action.id, baseSupportChange, newFactionSupport)
+        : {};
+
+      // Update faction support levels
+      for (const factionId in factionEffects) {
+        newFactionSupport[factionId] = Math.max(0, Math.min(100,
+          (newFactionSupport[factionId] || 50) + factionEffects[factionId]
+        ));
+      }
+
+      if (outcome.supportDelta) {
+        for (const s in outcome.supportDelta) {
+          if (s === 'ALL') {
+            for (const code in newSupport) {
+              newSupport[code] = Math.max(0, Math.min(100, newSupport[code] + (outcome.supportDelta[s] || 0)));
+            }
+          } else if (newSupport[s] !== undefined) {
+            newSupport[s] = Math.max(0, Math.min(100, newSupport[s] + outcome.supportDelta[s]));
+          }
+        }
+      }
+
+      const newCloutVal = Math.max(0, newClout + (outcome.cloutDelta || 0));
+      const newFundsVal = Math.max(0, newFunds + (outcome.fundsDelta || 0));
+      const newRiskVal = Math.max(0, state.risk + (outcome.riskDelta || 0));
+      const newNewsLog = [...state.newsLog];
+
+      // Log spin result
+      const spinDesc = `${spinResult.action.emoji} ${spinResult.action.name} + ${spinResult.modifier.emoji} ${spinResult.modifier.name} -> ${spinResult.target.emoji} ${spinResult.target.name}`;
+      newNewsLog.push(spinDesc);
+
+      if (finalComboResult.multiplier > 1) {
+        const comboMsg = finalComboResult.comboName
+          ? `🎰 ${finalComboResult.comboName}! ${finalComboResult.multiplier}x multiplier!`
+          : `🎰 COMBO! ${finalComboResult.multiplier}x multiplier!`;
+        newNewsLog.push(comboMsg);
+      }
+
+      if (isCriticalHit) {
+        newNewsLog.push(`⚡ CRITICAL HIT! Double effect on top of combo!`);
+      } else if (state.sessionFirstAction) {
+        newNewsLog.push(`☀️ Morning Momentum! First action bonus applied!`);
+      }
+
+      if (outcome.message) {
+        newNewsLog.push(outcome.message);
+      }
+
+      // Check for risk zone change
+      const newRiskZone = getRiskZone(newRiskVal);
+      if (newRiskZone !== state.previousRiskZone) {
+        const zoneInfo = RISK_ZONES[newRiskZone];
+        if (newRiskZone === 'CAUTION') {
+          newNewsLog.push(`⚠️ CAUTION ZONE: Advisors are getting nervous.`);
+        } else if (newRiskZone === 'DANGER') {
+          newNewsLog.push(`🔶 DANGER ZONE: Costs +20%. Platform scrutiny increasing!`);
+        } else if (newRiskZone === 'CRITICAL') {
+          newNewsLog.push(`🔴 CRITICAL ZONE: Costs +30%. Some actions LOCKED!`);
+        }
+      }
+
+      // Calculate streak
+      const riskIncreased = newRiskVal > state.risk;
+      let newStreak = riskIncreased ? 0 : state.streak + 1;
+      let newHighestStreak = Math.max(state.highestStreak, newStreak);
+
+      // Check for streak bonuses
+      const streakBonus = STREAK_BONUSES[newStreak as keyof typeof STREAK_BONUSES];
+      let bonusClout = 0;
+      let bonusFunds = 0;
+
+      if (streakBonus) {
+        newNewsLog.push(streakBonus.message);
+        if ('clout' in streakBonus) bonusClout = streakBonus.clout;
+        if ('funds' in streakBonus) bonusFunds = streakBonus.funds;
+        if ('supportBonus' in streakBonus && streakBonus.supportBonus) {
+          const randomState = getRandomStateCode(newSupport);
+          newSupport[randomState] = Math.min(100, newSupport[randomState] + 10);
+          newNewsLog.push(`🎯 ${randomState} received +10% support bonus!`);
+        }
+      }
+
+      const newTurn = state.turn + 1;
+
+      // Update cooldowns (spin actions don't have traditional cooldowns, but we tick them)
+      const updatedCooldowns = tickCooldowns(state.actionCooldowns);
+
+      // Track economic totals
+      const fundsGained = outcome.fundsDelta && outcome.fundsDelta > 0 ? outcome.fundsDelta : 0;
+      const cloutGained = outcome.cloutDelta && outcome.cloutDelta > 0 ? outcome.cloutDelta : 0;
+
+      // Track consecutive negative funds
+      const newConsecutiveNegativeFunds = newFundsVal <= 0
+        ? state.consecutiveNegativeFunds + 1
+        : 0;
+
+      let newState: GameState = {
+        ...state,
+        support: newSupport,
+        clout: newCloutVal + bonusClout,
+        funds: newFundsVal + bonusFunds,
+        risk: newRiskVal,
+        turn: newTurn,
+        newsLog: newNewsLog,
+        socialFeed: [...state.socialFeed],
+        pendingEvent: state.pendingEvent,
+        victory: false,
+        gameOver: false,
+        victoryType: undefined,
+        defeatType: undefined,
+        advisors: state.advisors,
+        streak: newStreak,
+        highestStreak: newHighestStreak,
+        lastActionWasCritical: isCriticalHit,
+        totalCriticalHits: state.totalCriticalHits + (isCriticalHit ? 1 : 0),
+        sessionFirstAction: false,
+        achievementsUnlocked: state.achievementsUnlocked,
+        factionSupport: newFactionSupport,
+        actionCooldowns: updatedCooldowns,
+        consecutiveActionUses: state.consecutiveActionUses,
+        totalFundsEarned: state.totalFundsEarned + fundsGained,
+        totalCloutEarned: state.totalCloutEarned + cloutGained,
+        consecutiveNegativeFunds: newConsecutiveNegativeFunds,
+        previousRiskZone: newRiskZone,
+      };
+
+      // Generate social media reactions
+      const tweets = generateTweets(spinResult.action.name);
+      newState.socialFeed = [...state.socialFeed, ...tweets];
+
+      // Possibly trigger a dynamic event
+      let event: GameEvent | null = null;
+
+      const activeChainEvent = getActiveChainEvent(newState);
+      if (activeChainEvent) {
+        event = activeChainEvent;
+      } else if (newTurn === 1) {
+        event = generateEvent(newState);
+      } else if (Math.random() < 0.3) {
+        if (Math.random() < 0.2) {
+          const chainEvent = tryStartChain(newState);
+          event = chainEvent || generateEvent(newState);
+        } else {
+          event = generateEvent(newState);
+        }
+      }
+
+      if (event) {
+        if (event.options && event.options.length > 0) {
+          newState.pendingEvent = event;
+        } else {
+          if (event.outcome) {
+            if (event.outcome.supportDelta) {
+              for (const s in event.outcome.supportDelta) {
+                if (s === 'ALL') {
+                  for (const code in newState.support) {
+                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (event.outcome.supportDelta[s] || 0)));
+                  }
+                } else if (newState.support[s] !== undefined) {
+                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + event.outcome.supportDelta[s]));
+                }
+              }
+            }
+            if (event.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + event.outcome.cloutDelta);
+            if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
+            if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
+          }
+          newState.newsLog.push(`${event.title}: ${event.description}`);
+        }
+      }
+
+      // Check victory conditions
+      const victoryType = checkVictoryConditions(newState);
+      if (victoryType) {
+        newState.victory = true;
+        newState.victoryType = victoryType;
+        newState.newsLog.push(getVictoryMessage(victoryType));
+      }
+
+      // Check defeat conditions
       const defeatType = checkDefeatConditions(newState);
       if (defeatType) {
         newState.gameOver = true;
