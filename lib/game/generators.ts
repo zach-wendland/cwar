@@ -642,6 +642,289 @@ const EVENT_POOL: EventTemplate[] = [
   },
 
   // =========================
+  // DECEMBER 2025 CURRENT EVENTS (8)
+  // =========================
+  {
+    id: 'doge_cuts',
+    category: 'political',
+    title: 'DOGE Targets Your Cause',
+    description: 'Elon\'s Department of Government Efficiency is reviewing programs your movement supports. Cuts may be coming.',
+    options: [
+      {
+        text: 'Rally supporters to flood Congressional offices',
+        outcome: {
+          fundsDelta: -20,
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 15,
+          riskDelta: 8,
+          message: 'Grassroots pressure works! Some programs spared from the chopping block.'
+        }
+      },
+      {
+        text: 'Embrace efficiency - pivot your messaging',
+        outcome: {
+          cloutDelta: 20,
+          supportDelta: { 'ALL': 2 },
+          riskDelta: -5,
+          message: 'Aligning with the zeitgeist. Your "lean government" pivot resonates.'
+        }
+      },
+      {
+        text: 'Attack DOGE as billionaire overreach',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 10,
+          riskDelta: 12,
+          message: 'Populist anger at tech oligarchs finds an audience.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'h1b_debate',
+    category: 'political',
+    title: 'H-1B Visa Controversy Explodes',
+    description: 'The MAGA civil war over H-1B visas has gone nuclear. Musk vs Bannon. Tech bros vs populists. Where do you stand?',
+    minTurn: 3,
+    options: [
+      {
+        text: 'Side with Musk - "We need the best talent"',
+        outcome: {
+          fundsDelta: 30,
+          cloutDelta: 15,
+          supportDelta: { 'ALL': -3 },
+          riskDelta: 8,
+          message: 'Tech donors love it. Populist base... not so much.'
+        }
+      },
+      {
+        text: 'Side with Bannon - "American workers first"',
+        outcome: {
+          supportDelta: { 'ALL': 6 },
+          cloutDelta: 10,
+          fundsDelta: -20,
+          riskDelta: 5,
+          message: 'The base is fired up! Silicon Valley doors close.'
+        }
+      },
+      {
+        text: 'Stay quiet and let them fight',
+        outcome: {
+          riskDelta: -5,
+          cloutDelta: 5,
+          message: 'Avoiding the crossfire. Both sides forget you exist for now.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'healthcare_discourse',
+    category: 'cultural',
+    title: 'Healthcare CEO Discourse',
+    description: 'Luigi Mangione\'s trial is dominating headlines. Healthcare CEO villain discourse is everywhere. How do you engage?',
+    options: [
+      {
+        text: 'Channel the anger into healthcare reform messaging',
+        outcome: {
+          supportDelta: { 'ALL': 7 },
+          cloutDelta: 20,
+          riskDelta: 10,
+          message: 'You\'ve tapped into real frustration. People are listening.'
+        }
+      },
+      {
+        text: 'Post "Free Luigi" memes ironically',
+        outcome: {
+          cloutDelta: 25,
+          riskDelta: 15,
+          message: 'Edgy content goes viral. Some advertisers get nervous.'
+        }
+      },
+      {
+        text: 'Stay out of it entirely',
+        outcome: {
+          riskDelta: -8,
+          cloutDelta: -5,
+          message: 'Playing it safe. Boring, but no blowback.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'tucker_interview',
+    category: 'media',
+    title: 'Tucker Carlson Wants You On',
+    description: 'Tucker\'s team reached out. His show has massive reach but also massive scrutiny. What do you do?',
+    minTurn: 4,
+    minSupport: 25,
+    options: [
+      {
+        text: 'Accept and speak freely',
+        outcome: {
+          supportDelta: { 'ALL': 8 },
+          cloutDelta: 40,
+          riskDelta: 15,
+          message: 'The interview goes viral. You\'ve reached millions of new people.'
+        }
+      },
+      {
+        text: 'Accept with strict talking points',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 25,
+          riskDelta: 5,
+          message: 'Controlled messaging. Safe but not as exciting.'
+        }
+      },
+      {
+        text: 'Decline - too controversial',
+        outcome: {
+          cloutDelta: -10,
+          riskDelta: -10,
+          message: 'Some supporters disappointed. Others relieved.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'groyper_infiltration',
+    category: 'political',
+    title: 'Young Staffers Going Groyper',
+    description: 'Reports say 30-40% of young GOP staffers in DC are sympathetic to America First ideas. The establishment is nervous.',
+    minTurn: 5,
+    options: [
+      {
+        text: 'Embrace the generational shift',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 20,
+          riskDelta: 12,
+          message: 'Young conservatives see you as an ally. Old guard takes notice.'
+        }
+      },
+      {
+        text: 'Distance yourself from the label',
+        outcome: {
+          cloutDelta: 5,
+          riskDelta: -8,
+          fundsDelta: 20,
+          message: 'Establishment donors breathe easier. Zoomers are disappointed.'
+        }
+      },
+      {
+        text: 'Play both sides',
+        outcome: {
+          cloutDelta: 10,
+          riskDelta: 5,
+          message: 'Walking the line. Everyone thinks you agree with them.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'kash_patel_fbi',
+    category: 'political',
+    title: 'FBI Under New Management',
+    description: 'Kash Patel is cleaning house at the FBI. Investigations are opening and closing. Your movement could be affected.',
+    minTurn: 6,
+    options: [
+      {
+        text: 'Celebrate the new direction loudly',
+        outcome: {
+          cloutDelta: 15,
+          supportDelta: { 'ALL': 4 },
+          riskDelta: -10,
+          message: 'The new FBI seems friendlier. Your risk exposure drops.'
+        }
+      },
+      {
+        text: 'Stay cautiously optimistic',
+        outcome: {
+          riskDelta: -5,
+          cloutDelta: 5,
+          message: 'Measured response. Don\'t want to jinx it.'
+        }
+      },
+      {
+        text: 'Warn that power corrupts anyone',
+        outcome: {
+          cloutDelta: 10,
+          supportDelta: { 'ALL': 2 },
+          riskDelta: 5,
+          message: 'Principled consistency. Some MAGA folks aren\'t happy.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'rfk_health_policy',
+    category: 'political',
+    title: 'RFK Jr\'s Health Crusade',
+    description: 'The new HHS Secretary is pushing controversial health policies. Raw milk and fluoride debates are everywhere.',
+    options: [
+      {
+        text: 'Embrace the health freedom message',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 15,
+          riskDelta: 8,
+          message: 'Health skeptics love you. Mainstream media less so.'
+        }
+      },
+      {
+        text: 'Focus on the anti-corporate angle only',
+        outcome: {
+          cloutDelta: 10,
+          supportDelta: { 'ALL': 3 },
+          riskDelta: 3,
+          message: 'Big Pharma critique resonates. Avoid the fringe stuff.'
+        }
+      },
+      {
+        text: 'Stay out of health debates entirely',
+        outcome: {
+          riskDelta: -5,
+          message: 'Not your lane. No gains, no losses.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'dark_maga_aesthetics',
+    category: 'cultural',
+    title: 'Dark MAGA Goes Mainstream',
+    description: 'The apocalyptic, vengeful Dark MAGA aesthetic is everywhere. Black and red. Vengeance rhetoric. It\'s a vibe.',
+    options: [
+      {
+        text: 'Lean into the aesthetic hard',
+        outcome: {
+          cloutDelta: 30,
+          supportDelta: { 'ALL': 3 },
+          riskDelta: 15,
+          message: 'Your rebrand is complete. You look dangerous in a cool way.'
+        }
+      },
+      {
+        text: 'Adopt some elements tastefully',
+        outcome: {
+          cloutDelta: 15,
+          supportDelta: { 'ALL': 2 },
+          riskDelta: 5,
+          message: 'Subtle nods to the trend without going full edgelord.'
+        }
+      },
+      {
+        text: 'Reject it as cringe',
+        outcome: {
+          cloutDelta: -5,
+          riskDelta: -5,
+          message: 'Purists appreciate it. Zoomers think you\'re out of touch.'
+        }
+      }
+    ]
+  },
+
+  // =========================
   // CULTURAL EVENTS (6)
   // =========================
   {
@@ -838,36 +1121,36 @@ function getEligibleEvents(state: GameState): EventTemplate[] {
 export function generateAdvisors(): Advisor[] {
   return [
     {
-      name: 'Mike "MemeLord" Miller',
-      role: 'Social Media Strategist',
-      ideology: 'Chaotic Neutral Meme Sorcerer',
-      traits: 'Former meme lord turned campaign strategist, irreverent and witty',
+      name: 'Chad "DOGE" Williams',
+      role: 'Efficiency Consultant',
+      ideology: 'Techno-Populist',
+      traits: 'Former tech bro who pivoted to political consulting after the 2024 election',
       quotes: [
-        'We memed the establishment into oblivion.',
-        'If it isn\'t viral, it didn\'t happen.',
-        'They can\'t ban us all... right?'
+        'We\'re cutting the bloat. Government efficiency is the new punk rock.',
+        'Elon showed us the way. Now we execute.',
+        'If DOGE can cut it, we can meme it.'
       ]
     },
     {
-      name: 'Dana Data',
-      role: 'Analytics Guru',
-      ideology: 'Pragmatic Technocrat',
-      traits: 'Data-driven strategist who trusts numbers over gut feelings',
+      name: 'Dana "Dark MAGA" Reyes',
+      role: 'Aesthetic Director',
+      ideology: 'Accelerationist Aesthete',
+      traits: 'Graphic designer who pioneered the black-and-red Dark MAGA look',
       quotes: [
-        'Numbers never lie, but politicians do.',
-        'Viral content is just a data point trending upward.',
-        'In meme wars, I bring the spreadsheets.'
+        'Vengeance is a brand now. Embrace it.',
+        'The algorithm rewards intensity. Go dark or go home.',
+        'Every meme is a psy-op. Make yours count.'
       ]
     },
     {
-      name: 'Riley Rebel',
-      role: 'Grassroots Organizer',
-      ideology: 'Radical Idealist',
-      traits: 'Street protest veteran who adapted to digital activism',
+      name: 'Tucker\'s Intern Kyle',
+      role: 'Media Booker',
+      ideology: 'Reluctant Celebrity Handler',
+      traits: 'Young staffer who knows everyone in conservative media',
       quotes: [
-        'I was organizing rallies before it was cool.',
-        'Memes are the new street murals.',
-        'The revolution will be livestreamed.'
+        'I can get you on Tucker. The question is: are you ready?',
+        '30-40% of DC staffers are on our side now. We\'re winning.',
+        'Bannon wants a call. Musk is posting about you. Pick your fighter.'
       ]
     }
   ];
@@ -933,22 +1216,38 @@ export function resetEventTracking(): void {
 
 // Generate fake social media posts reacting to the player's last action
 export function generateTweets(lastActionName: string): Tweet[] {
-  // Example prompt: "Write 3 humorous fictional tweets reacting to the player's last move: <lastActionName>"
-  const handles = ['@Anon123', '@MemeQueen', '@TruthHurts', '@SnarkyGuy', '@FanGirl'];
+  const handles = [
+    '@DOGEPatriot47',
+    '@DarkMAGA_Dana',
+    '@GroyperKing',
+    '@IndivisibleNow',
+    '@FreeLuigiBot',
+    '@TuckerFanAccount',
+    '@BannonWarRoom',
+    '@ResistanceRises',
+    '@H1BDebater',
+    '@KashFan2025'
+  ];
   const randomHandle = () => handles[Math.floor(Math.random() * handles.length)];
 
+  const reactions = [
+    `"${lastActionName}" is exactly what DOGE would approve of. Efficient. Based.`,
+    `${lastActionName}?? This is giving Dark MAGA energy and I'm here for it.`,
+    `Bannon just mentioned "${lastActionName}" on the War Room. You're on the radar.`,
+    `Can't believe they just did "${lastActionName}". Tucker needs to cover this.`,
+    `${lastActionName} might just change the game... or completely flop. The algorithm decides.`,
+    `The Groypers are posting about "${lastActionName}" now. Mainstream incoming.`,
+    `Healthcare CEO discourse has entered the "${lastActionName}" debate. Wild times.`,
+    `Everyone's talking about "${lastActionName}". The 30-40% are paying attention.`,
+    `"${lastActionName}" - this is the kind of move that gets you on the podcast circuit.`,
+    `Indivisible chapters are organizing against "${lastActionName}". You're making waves.`
+  ];
+
+  // Pick 3 random reactions
+  const shuffled = reactions.sort(() => Math.random() - 0.5);
   return [
-    {
-      user: randomHandle(),
-      content: `Can't believe they just did "${lastActionName}". This is wild! #CultureWar`
-    },
-    {
-      user: randomHandle(),
-      content: `${lastActionName} might just change the game... or completely flop. 🤔`
-    },
-    {
-      user: randomHandle(),
-      content: `Everyone's talking about "${lastActionName}" now. The movement sure knows how to stay in the spotlight!`
-    }
+    { user: randomHandle(), content: shuffled[0] },
+    { user: randomHandle(), content: shuffled[1] },
+    { user: randomHandle(), content: shuffled[2] }
   ];
 }

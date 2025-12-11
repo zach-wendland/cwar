@@ -1,13 +1,143 @@
 // actions.ts - define the available player actions and their effects
 import { EventOutcome, GameState } from './GameContext';
+import {
+  PoliticalFactionId,
+  getActionModifiers,
+  getAdjustedCost,
+} from './politicalFactions';
 
 // Schema for an action definition
-interface GameActionConfig {
+export interface GameActionConfig {
   id: string;
   name: string;
   description: string;
   cost?: { funds?: number; clout?: number };
   perform: (state: GameState) => EventOutcome;
+}
+
+// ================================
+// MULTIPLAYER ACTION HELPERS
+// ================================
+
+/**
+ * Get action cost adjusted for faction modifiers
+ */
+export function getMultiplayerActionCost(
+  actionId: string,
+  factionId: PoliticalFactionId
+): { funds?: number; clout?: number } {
+  const action = actionsConfig.find(a => a.id === actionId);
+  if (!action) return {};
+  return getAdjustedCost(factionId, actionId, action.cost || {});
+}
+
+/**
+ * Check if a player can afford an action
+ */
+export function canAffordAction(
+  actionId: string,
+  factionId: PoliticalFactionId,
+  playerFunds: number,
+  playerClout: number
+): boolean {
+  const cost = getMultiplayerActionCost(actionId, factionId);
+  return (
+    playerFunds >= (cost.funds || 0) &&
+    playerClout >= (cost.clout || 0)
+  );
+}
+
+/**
+ * Apply faction modifiers to action outcome
+ */
+export function applyFactionModifiers(
+  outcome: EventOutcome,
+  actionId: string,
+  factionId: PoliticalFactionId
+): EventOutcome {
+  const modifiers = getActionModifiers(factionId, actionId);
+
+  // Apply effect multiplier to support changes
+  const adjustedSupportDelta: { [key: string]: number } = {};
+  if (outcome.supportDelta) {
+    for (const [state, delta] of Object.entries(outcome.supportDelta)) {
+      adjustedSupportDelta[state] = Math.round(delta * modifiers.effectMultiplier);
+    }
+  }
+
+  // Apply risk multiplier
+  const adjustedRiskDelta = outcome.riskDelta
+    ? Math.round(outcome.riskDelta * modifiers.riskMultiplier)
+    : undefined;
+
+  // Clout gains can also be boosted (half the effect multiplier)
+  const cloutBoost = modifiers.effectMultiplier > 1 ? (modifiers.effectMultiplier - 1) / 2 + 1 : 1;
+  const adjustedCloutDelta = outcome.cloutDelta
+    ? Math.round(outcome.cloutDelta * cloutBoost)
+    : undefined;
+
+  return {
+    ...outcome,
+    supportDelta: Object.keys(adjustedSupportDelta).length > 0 ? adjustedSupportDelta : undefined,
+    riskDelta: adjustedRiskDelta,
+    cloutDelta: adjustedCloutDelta,
+  };
+}
+
+/**
+ * Get action with faction context (for UI display)
+ */
+export function getActionWithFactionContext(
+  actionId: string,
+  factionId: PoliticalFactionId
+): {
+  action: GameActionConfig;
+  adjustedCost: { funds?: number; clout?: number };
+  modifiers: { costMultiplier: number; effectMultiplier: number; riskMultiplier: number };
+  isStrength: boolean;
+  isWeakness: boolean;
+} | null {
+  const action = actionsConfig.find(a => a.id === actionId);
+  if (!action) return null;
+
+  const modifiers = getActionModifiers(factionId, actionId);
+  const adjustedCost = getAdjustedCost(factionId, actionId, action.cost || {});
+
+  return {
+    action,
+    adjustedCost,
+    modifiers,
+    isStrength: modifiers.effectMultiplier > 1.2 || modifiers.costMultiplier < 0.8,
+    isWeakness: modifiers.effectMultiplier < 0.9 || modifiers.costMultiplier > 1.2,
+  };
+}
+
+/**
+ * Get all actions categorized by faction affinity
+ */
+export function getActionsWithFactionAffinity(factionId: PoliticalFactionId): {
+  strengths: GameActionConfig[];
+  neutral: GameActionConfig[];
+  weaknesses: GameActionConfig[];
+} {
+  const strengths: GameActionConfig[] = [];
+  const neutral: GameActionConfig[] = [];
+  const weaknesses: GameActionConfig[] = [];
+
+  for (const action of actionsConfig) {
+    const context = getActionWithFactionContext(action.id, factionId);
+    if (!context) continue;
+
+    if (context.isStrength) {
+      strengths.push(action);
+    } else if (context.isWeakness) {
+      weaknesses.push(action);
+    } else {
+      neutral.push(action);
+    }
+  }
+
+  return { strengths, neutral, weaknesses };
 }
 
 // Helper to get random states
