@@ -32,6 +32,27 @@ import {
   checkForSabotage,
   checkForFactionBonus,
 } from './moodEffects';
+import {
+  DailyChallenge,
+  DailyProgress,
+  LoginStreak,
+  getDailyChallenge,
+  loadDailyProgress,
+  saveDailyProgress,
+  loadLoginStreak,
+  saveLoginStreak,
+  processLogin,
+  validateSpinConstraints,
+  validateGameStateConstraints,
+  checkChallengeGoal,
+  getChallengeStartModifiers,
+} from './dailyChallenge';
+import {
+  SeasonalEvent,
+  getCurrentSeason,
+  applySeasonalModifiers,
+  checkBreakingNews,
+} from './seasonalEvents';
 
 // Define interfaces for game state and related entities
 export interface Advisor {
@@ -131,6 +152,12 @@ export interface GameState {
   // Sentiment engine
   sentiment: SentimentState;
   recentReactions: FactionReaction[];
+  // Daily challenge tracking
+  activeChallenge?: DailyChallenge;
+  challengeComboCount: number;
+  challengeRerollUsed: boolean;
+  // Active season
+  activeSeason?: SeasonalEvent;
 }
 
 // Actions for the reducer
@@ -140,7 +167,10 @@ type GameAction =
   | { type: 'REROLL_SPIN'; cost: number }
   | { type: 'RESOLVE_EVENT'; optionIndex: number }
   | { type: 'RESET_GAME' }
-  | { type: 'CLEAR_CRITICAL_FLAG' };
+  | { type: 'CLEAR_CRITICAL_FLAG' }
+  | { type: 'START_CHALLENGE'; challenge: DailyChallenge }
+  | { type: 'COMPLETE_CHALLENGE' }
+  | { type: 'FAIL_CHALLENGE'; reason: string };
 
 // Critical hit chance (10%)
 const CRITICAL_HIT_CHANCE = 0.10;
@@ -214,6 +244,12 @@ function createInitialState(): GameState {
     // Sentiment engine
     sentiment: initializeSentimentState(),
     recentReactions: [],
+    // Daily challenge tracking
+    activeChallenge: undefined,
+    challengeComboCount: 0,
+    challengeRerollUsed: false,
+    // Active season
+    activeSeason: getCurrentSeason() || undefined,
   };
 }
 
@@ -1025,6 +1061,96 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, lastActionWasCritical: false };
     }
 
+    case 'START_CHALLENGE': {
+      const { challenge } = action;
+      const modifiers = getChallengeStartModifiers(challenge);
+
+      // Reset game state for challenge with modified starting resources
+      resetEventTracking();
+      resetChainTracking();
+
+      const freshState = createInitialState();
+
+      return {
+        ...freshState,
+        funds: modifiers.funds,
+        clout: modifiers.clout,
+        activeChallenge: challenge,
+        challengeComboCount: 0,
+        challengeRerollUsed: false,
+        newsLog: [
+          `🎯 Daily Challenge Started: ${challenge.name}`,
+          challenge.description,
+          ...challenge.constraints.map(c => `⚠️ ${c.description}`),
+        ],
+      };
+    }
+
+    case 'COMPLETE_CHALLENGE': {
+      if (!state.activeChallenge) return state;
+
+      const challenge = state.activeChallenge;
+
+      // Save progress
+      const progress: DailyProgress = {
+        dateKey: challenge.dateKey,
+        challengeId: challenge.id,
+        started: true,
+        completed: true,
+        bestAttempt: {
+          support: Math.round(
+            Object.values(state.support).reduce((a, b) => a + b, 0) /
+            Object.keys(state.support).length
+          ),
+          risk: state.risk,
+          turns: state.turn,
+        },
+      };
+      saveDailyProgress(progress);
+
+      return {
+        ...state,
+        activeChallenge: undefined,
+        newsLog: [
+          ...state.newsLog,
+          `🏆 Challenge Complete: ${challenge.name}!`,
+          `Rewards: +${challenge.reward.prestige} prestige, +${challenge.reward.clout} clout, +$${challenge.reward.funds}`,
+        ],
+      };
+    }
+
+    case 'FAIL_CHALLENGE': {
+      if (!state.activeChallenge) return state;
+
+      const challenge = state.activeChallenge;
+
+      // Save failed attempt
+      const progress: DailyProgress = {
+        dateKey: challenge.dateKey,
+        challengeId: challenge.id,
+        started: true,
+        completed: false,
+        bestAttempt: {
+          support: Math.round(
+            Object.values(state.support).reduce((a, b) => a + b, 0) /
+            Object.keys(state.support).length
+          ),
+          risk: state.risk,
+          turns: state.turn,
+        },
+      };
+      saveDailyProgress(progress);
+
+      return {
+        ...state,
+        activeChallenge: undefined,
+        newsLog: [
+          ...state.newsLog,
+          `❌ Challenge Failed: ${action.reason}`,
+        ],
+      };
+    }
+
     case 'RESET_GAME': {
       resetEventTracking();
       resetChainTracking();
@@ -1075,6 +1201,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Victory/defeat type tracking
         victoryType: parsed.victoryType,
         defeatType: parsed.defeatType,
+        // Daily challenge fields
+        activeChallenge: parsed.activeChallenge,
+        challengeComboCount: parsed.challengeComboCount ?? 0,
+        challengeRerollUsed: parsed.challengeRerollUsed ?? false,
+        // Season
+        activeSeason: getCurrentSeason() || undefined,
+        // Sentiment (ensure exists)
+        sentiment: parsed.sentiment ?? initializeSentimentState(),
+        recentReactions: parsed.recentReactions ?? [],
       };
     }
     return createInitialState();
