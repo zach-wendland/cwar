@@ -155,3 +155,4 @@ Located in `/components/ui`:
 - Configured for Vercel deployment
 - API routes become serverless functions
 - See `vercel.json` for configuration
+- leverage palywright mcp for testing

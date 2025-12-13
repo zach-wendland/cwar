@@ -92,12 +92,12 @@ export interface Tweet {
   content: string;
 }
 
-// Risk zone thresholds
+// Risk zone thresholds (CAUTION now meaningful - 10% cost increase)
 export const RISK_ZONES = {
   SAFE: { min: 0, max: 49, color: 'green', label: 'Safe', costMultiplier: 1.0 },
-  CAUTION: { min: 50, max: 74, color: 'yellow', label: 'Caution', costMultiplier: 1.0 },
-  DANGER: { min: 75, max: 89, color: 'orange', label: 'Danger', costMultiplier: 1.2 },
-  CRITICAL: { min: 90, max: 99, color: 'red', label: 'Critical', costMultiplier: 1.3 },
+  CAUTION: { min: 50, max: 74, color: 'yellow', label: 'Caution', costMultiplier: 1.1 },
+  DANGER: { min: 75, max: 89, color: 'red', label: 'Danger', costMultiplier: 1.25 },
+  CRITICAL: { min: 90, max: 99, color: 'red', label: 'Critical', costMultiplier: 1.4 },
 } as const;
 
 export type RiskZone = keyof typeof RISK_ZONES;
@@ -114,6 +114,30 @@ export type VictoryType = 'POPULAR_MANDATE' | 'FACTION_DOMINANCE' | 'ECONOMIC_PO
 
 // Defeat types
 export type DefeatType = 'RISK_COLLAPSE' | 'FACTION_ABANDONMENT' | 'BANKRUPTCY' | 'TIME_OUT';
+
+// Tutorial step types for progressive onboarding
+export type TutorialStep =
+  | 'WELCOME'
+  | 'FIRST_ACTION'
+  | 'RESOURCES_INTRO'
+  | 'MAP_INTRO'
+  | 'SPIN_MODE'
+  | 'FACTION_INTRO'
+  | 'VICTORY_PATHS'
+  | 'RISK_WARNING';
+
+// Tutorial state interface
+export interface TutorialState {
+  tutorialDismissed: boolean;
+  currentStep: TutorialStep | null;
+  completedSteps: TutorialStep[];
+  firstTimeFeatures: {
+    spinMode: boolean;
+    factionPanel: boolean;
+    riskZone: boolean;
+    victoryPaths: boolean;
+  };
+}
 
 // Main game state structure with gamification additions
 export interface GameState {
@@ -158,6 +182,8 @@ export interface GameState {
   challengeRerollUsed: boolean;
   // Active season
   activeSeason?: SeasonalEvent;
+  // Tutorial system
+  tutorial: TutorialState;
 }
 
 // Actions for the reducer
@@ -170,10 +196,16 @@ type GameAction =
   | { type: 'CLEAR_CRITICAL_FLAG' }
   | { type: 'START_CHALLENGE'; challenge: DailyChallenge }
   | { type: 'COMPLETE_CHALLENGE' }
-  | { type: 'FAIL_CHALLENGE'; reason: string };
+  | { type: 'FAIL_CHALLENGE'; reason: string }
+  | { type: 'DISMISS_TUTORIAL' }
+  | { type: 'COMPLETE_TUTORIAL_STEP'; step: TutorialStep }
+  | { type: 'SET_TUTORIAL_STEP'; step: TutorialStep | null }
+  | { type: 'MARK_FEATURE_SEEN'; feature: keyof TutorialState['firstTimeFeatures'] };
 
-// Critical hit chance (10%)
-const CRITICAL_HIT_CHANCE = 0.10;
+// Critical hit chance (nerfed from 10% to 8%)
+const CRITICAL_HIT_CHANCE = 0.08;
+// Critical hit multiplier (nerfed from 2x to 1.75x)
+const CRITICAL_MULTIPLIER = 1.75;
 
 // Streak bonus thresholds
 const STREAK_BONUSES = {
@@ -250,6 +282,56 @@ function createInitialState(): GameState {
     challengeRerollUsed: false,
     // Active season
     activeSeason: getCurrentSeason() || undefined,
+    // Tutorial system - check localStorage for returning players
+    tutorial: loadTutorialState(),
+  };
+}
+
+// Helper to load tutorial state from localStorage
+function loadTutorialState(): TutorialState {
+  if (typeof window === 'undefined') {
+    return createDefaultTutorialState();
+  }
+
+  try {
+    const saved = localStorage.getItem('tutorialState');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...createDefaultTutorialState(),
+        ...parsed,
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to load tutorial state:', e);
+  }
+
+  return createDefaultTutorialState();
+}
+
+// Helper to save tutorial state to localStorage
+function saveTutorialState(tutorial: TutorialState): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem('tutorialState', JSON.stringify(tutorial));
+  } catch (e) {
+    console.warn('Failed to save tutorial state:', e);
+  }
+}
+
+// Create default tutorial state for new players
+function createDefaultTutorialState(): TutorialState {
+  return {
+    tutorialDismissed: false,
+    currentStep: 'WELCOME',
+    completedSteps: [],
+    firstTimeFeatures: {
+      spinMode: false,
+      factionPanel: false,
+      riskZone: false,
+      victoryPaths: false,
+    },
   };
 }
 
@@ -286,6 +368,36 @@ function applyOutcomeWithMultiplier(
 function getRandomStateCode(support: { [key: string]: number }): string {
   const codes = Object.keys(support);
   return codes[Math.floor(Math.random() * codes.length)];
+}
+
+// Defeat warning system - generates graduated warnings before defeat
+function checkDefeatWarnings(state: GameState): string[] {
+  const warnings: string[] = [];
+
+  // Bankruptcy warning (1-2 turns from defeat)
+  if (state.consecutiveNegativeFunds >= 1) {
+    const turnsLeft = 3 - state.consecutiveNegativeFunds;
+    warnings.push(`\u26a0\ufe0f BANKRUPTCY WARNING: ${turnsLeft} turn${turnsLeft > 1 ? 's' : ''} until defeat!`);
+  }
+
+  // Faction abandonment warning
+  const lowestFaction = Math.min(...Object.values(state.factionSupport));
+  if (lowestFaction <= 15 && lowestFaction > 0) {
+    warnings.push(`\u26a0\ufe0f FACTION DANGER: A faction is at critical levels (${Math.round(lowestFaction)}%)!`);
+  }
+
+  // Risk collapse warning
+  if (state.risk >= 85 && state.risk < 100) {
+    warnings.push(`\u26a0\ufe0f RISK CRITICAL: One risky move could end your campaign!`);
+  }
+
+  // Time pressure warning
+  if (state.turn >= 40 && state.turn < 50) {
+    const turnsLeft = 50 - state.turn;
+    warnings.push(`\u23f0 TIME RUNNING OUT: ${turnsLeft} turns remaining before campaign ends!`);
+  }
+
+  return warnings;
 }
 
 // Victory condition checks
@@ -403,10 +515,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Check for critical hit (with advisor bonus)
       const critBonus = getCriticalBonus(advisorNames);
       const isCriticalHit = Math.random() < (CRITICAL_HIT_CHANCE + critBonus / 100);
-      const critMultiplier = isCriticalHit ? 2 : 1;
+      const critMultiplier = isCriticalHit ? CRITICAL_MULTIPLIER : 1;
 
-      // Check for first action of session bonus (1.5x)
-      const sessionMultiplier = state.sessionFirstAction ? 1.5 : 1;
+      // Check for first action of session bonus (nerfed from 1.5x to 1.25x)
+      const sessionMultiplier = state.sessionFirstAction ? 1.25 : 1;
       const finalMultiplier = isCriticalHit ? critMultiplier : sessionMultiplier;
 
       // Apply diminishing returns multiplier
@@ -573,8 +685,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const activeChainEvent = getActiveChainEvent(newState);
       if (activeChainEvent) {
         event = activeChainEvent;
-      } else if (newTurn === 1) {
-        // First turn: guaranteed regular event
+      } else if (newTurn === 3) {
+        // Turn 3: guaranteed event (delayed to give players time to orient)
         event = generateEvent(newState);
       } else if (Math.random() < 0.3) {
         // 30% chance for event
@@ -609,6 +721,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
           newState.newsLog.push(`${event.title}: ${event.description}`);
         }
+      }
+
+      // Add defeat warnings (graduated warnings before actual defeat)
+      const defeatWarnings = checkDefeatWarnings(newState);
+      if (defeatWarnings.length > 0) {
+        newState.newsLog.push(...defeatWarnings);
       }
 
       // Check victory conditions (multiple paths to win)
@@ -895,7 +1013,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const activeChainEvent = getActiveChainEvent(newState);
       if (activeChainEvent) {
         event = activeChainEvent;
-      } else if (newTurn === 1) {
+      } else if (newTurn === 3) {
+        // Turn 3: guaranteed event (delayed to give players time to orient)
         event = generateEvent(newState);
       } else if (Math.random() < 0.3) {
         if (Math.random() < 0.2) {
@@ -1151,10 +1270,72 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    // Tutorial system actions
+    case 'DISMISS_TUTORIAL': {
+      const newTutorial = {
+        ...state.tutorial,
+        tutorialDismissed: true,
+        currentStep: state.tutorial.completedSteps.length === 0 ? 'FIRST_ACTION' as TutorialStep : null,
+      };
+      saveTutorialState(newTutorial);
+      return {
+        ...state,
+        tutorial: newTutorial,
+      };
+    }
+
+    case 'COMPLETE_TUTORIAL_STEP': {
+      if (state.tutorial.completedSteps.includes(action.step)) {
+        return state;
+      }
+      const newTutorial = {
+        ...state.tutorial,
+        completedSteps: [...state.tutorial.completedSteps, action.step],
+        currentStep: null,
+      };
+      saveTutorialState(newTutorial);
+      return {
+        ...state,
+        tutorial: newTutorial,
+      };
+    }
+
+    case 'SET_TUTORIAL_STEP': {
+      const newTutorial = {
+        ...state.tutorial,
+        currentStep: action.step,
+      };
+      return {
+        ...state,
+        tutorial: newTutorial,
+      };
+    }
+
+    case 'MARK_FEATURE_SEEN': {
+      const newTutorial = {
+        ...state.tutorial,
+        firstTimeFeatures: {
+          ...state.tutorial.firstTimeFeatures,
+          [action.feature]: true,
+        },
+      };
+      saveTutorialState(newTutorial);
+      return {
+        ...state,
+        tutorial: newTutorial,
+      };
+    }
+
     case 'RESET_GAME': {
       resetEventTracking();
       resetChainTracking();
-      return createInitialState();
+      // Keep tutorial state on reset (player has already seen it)
+      const existingTutorial = state.tutorial;
+      const newState = createInitialState();
+      return {
+        ...newState,
+        tutorial: existingTutorial.tutorialDismissed ? existingTutorial : newState.tutorial,
+      };
     }
 
     default:
@@ -1166,8 +1347,50 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 interface GameContextProps {
   state: GameState;
   dispatch: React.Dispatch<GameAction>;
+  // Memoized computed values to prevent expensive recalculations
+  avgSupport: number;
+  statesControlled: number;
 }
 const GameContext = createContext<GameContextProps | undefined>(undefined);
+
+// Safe localStorage operations with error handling
+const safeLocalStorageGet = (key: string): string | null => {
+  try {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`Failed to read from localStorage (${key}):`, error);
+    return null;
+  }
+};
+
+const safeLocalStorageSet = (key: string, value: string): boolean => {
+  try {
+    if (typeof window === 'undefined') return false;
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    // Handle quota exceeded or other storage errors
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('localStorage quota exceeded. Consider clearing old saves.');
+    } else {
+      console.warn(`Failed to write to localStorage (${key}):`, error);
+    }
+    return false;
+  }
+};
+
+// Debounce helper for localStorage saves
+const createDebouncedSave = (delay: number) => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  return (key: string, value: string) => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      safeLocalStorageSet(key, value);
+      timeoutId = null;
+    }, delay);
+  };
+};
 
 // Provider component
 export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -1177,55 +1400,95 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return createInitialState();
     }
 
-    const savedState = localStorage.getItem('gameSave');
-    if (savedState) {
-      const parsed = JSON.parse(savedState) as GameState;
-      // Ensure new fields exist (migration for existing saves)
-      return {
-        ...parsed,
-        streak: parsed.streak ?? 0,
-        highestStreak: parsed.highestStreak ?? 0,
-        lastActionWasCritical: parsed.lastActionWasCritical ?? false,
-        totalCriticalHits: parsed.totalCriticalHits ?? 0,
-        sessionFirstAction: true, // Reset on page load
-        achievementsUnlocked: parsed.achievementsUnlocked ?? [],
-        factionSupport: parsed.factionSupport ?? initializeFactionSupport(),
-        // New action economy fields
-        actionCooldowns: parsed.actionCooldowns ?? {},
-        consecutiveActionUses: parsed.consecutiveActionUses ?? {},
-        // New economic tracking fields
-        totalFundsEarned: parsed.totalFundsEarned ?? 0,
-        totalCloutEarned: parsed.totalCloutEarned ?? 0,
-        consecutiveNegativeFunds: parsed.consecutiveNegativeFunds ?? 0,
-        previousRiskZone: parsed.previousRiskZone ?? 'SAFE',
-        // Victory/defeat type tracking
-        victoryType: parsed.victoryType,
-        defeatType: parsed.defeatType,
-        // Daily challenge fields
-        activeChallenge: parsed.activeChallenge,
-        challengeComboCount: parsed.challengeComboCount ?? 0,
-        challengeRerollUsed: parsed.challengeRerollUsed ?? false,
-        // Season
-        activeSeason: getCurrentSeason() || undefined,
-        // Sentiment (ensure exists)
-        sentiment: parsed.sentiment ?? initializeSentimentState(),
-        recentReactions: parsed.recentReactions ?? [],
-      };
+    try {
+      const savedState = safeLocalStorageGet('gameSave');
+      if (savedState) {
+        const parsed = JSON.parse(savedState) as GameState;
+
+        // Validate basic structure exists
+        if (!parsed || typeof parsed !== 'object' || !('turn' in parsed)) {
+          console.warn('Invalid save data structure, starting fresh');
+          return createInitialState();
+        }
+
+        // Ensure new fields exist (migration for existing saves)
+        return {
+          ...parsed,
+          streak: parsed.streak ?? 0,
+          highestStreak: parsed.highestStreak ?? 0,
+          lastActionWasCritical: parsed.lastActionWasCritical ?? false,
+          totalCriticalHits: parsed.totalCriticalHits ?? 0,
+          sessionFirstAction: true, // Reset on page load
+          achievementsUnlocked: parsed.achievementsUnlocked ?? [],
+          factionSupport: parsed.factionSupport ?? initializeFactionSupport(),
+          // New action economy fields
+          actionCooldowns: parsed.actionCooldowns ?? {},
+          consecutiveActionUses: parsed.consecutiveActionUses ?? {},
+          // New economic tracking fields
+          totalFundsEarned: parsed.totalFundsEarned ?? 0,
+          totalCloutEarned: parsed.totalCloutEarned ?? 0,
+          consecutiveNegativeFunds: parsed.consecutiveNegativeFunds ?? 0,
+          previousRiskZone: parsed.previousRiskZone ?? 'SAFE',
+          // Victory/defeat type tracking
+          victoryType: parsed.victoryType,
+          defeatType: parsed.defeatType,
+          // Daily challenge fields
+          activeChallenge: parsed.activeChallenge,
+          challengeComboCount: parsed.challengeComboCount ?? 0,
+          challengeRerollUsed: parsed.challengeRerollUsed ?? false,
+          // Season
+          activeSeason: getCurrentSeason() || undefined,
+          // Sentiment (ensure exists)
+          sentiment: parsed.sentiment ?? initializeSentimentState(),
+          recentReactions: parsed.recentReactions ?? [],
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to parse saved game state:', error);
+      // Clear corrupted data
+      safeLocalStorageSet('gameSave', '');
     }
     return createInitialState();
   };
 
   const [state, dispatch] = useReducer(gameReducer, undefined, initializeState);
 
-  // Persist game state to localStorage
+  // Memoize expensive support calculations - only recalculate when support changes
+  const avgSupport = React.useMemo(() => {
+    const supportValues = Object.values(state.support);
+    if (supportValues.length === 0) return 0;
+    return Math.round(supportValues.reduce((a, b) => a + b, 0) / supportValues.length);
+  }, [state.support]);
+
+  const statesControlled = React.useMemo(() => {
+    return Object.values(state.support).filter(v => v >= 60).length;
+  }, [state.support]);
+
+  // Debounced save to reduce localStorage writes (500ms debounce)
+  const debouncedSave = React.useMemo(() => createDebouncedSave(500), []);
+
+  // Persist game state to localStorage with debouncing
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('gameSave', JSON.stringify(state));
+      try {
+        const serialized = JSON.stringify(state);
+        debouncedSave('gameSave', serialized);
+      } catch (error) {
+        console.warn('Failed to serialize game state:', error);
+      }
     }
-  }, [state]);
+  }, [state, debouncedSave]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = React.useMemo(() => ({
+    state,
+    dispatch,
+    avgSupport,
+    statesControlled,
+  }), [state, avgSupport, statesControlled]);
 
   return (
-    <GameContext.Provider value={{ state, dispatch }}>
+    <GameContext.Provider value={contextValue}>
       {children}
     </GameContext.Provider>
   );

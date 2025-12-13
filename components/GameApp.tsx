@@ -1,10 +1,49 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Toaster } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Star, Calendar } from "lucide-react";
+
+// Focus trap hook for modal accessibility
+const useFocusTrap = (isActive: boolean, containerRef: React.RefObject<HTMLDivElement | null>) => {
+  useEffect(() => {
+    if (!isActive || !containerRef.current) return;
+
+    const container = containerRef.current;
+    const focusableElements = container.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    // Focus first element when trap activates
+    firstElement?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        if (e.shiftKey) {
+          // Shift + Tab: go to previous
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          // Tab: go to next
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    };
+
+    container.addEventListener('keydown', handleKeyDown);
+    return () => container.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, containerRef]);
+};
+import { Trophy, Star, Calendar, HelpCircle } from "lucide-react";
 import { useGameContext } from "@/lib/game/GameContext";
+import ComprehensiveTutorial from "./game/ComprehensiveTutorial";
 import { useGameFeedback } from "@/hooks/useGameFeedback";
 import { useScreenShake } from "@/hooks/useScreenShake";
 import {
@@ -36,12 +75,15 @@ import {
 import { ParticleSystem, useParticles } from "./game/ParticleSystem";
 import CollapsibleStatsBar from "./game/CollapsibleStatsBar";
 import BottomSheet from "./game/BottomSheet";
+import VictoryTracker from "./game/VictoryTracker";
 import { Users } from "lucide-react";
 
 const GameApp: React.FC = () => {
-  const { state, dispatch } = useGameContext();
+  const { state, dispatch, avgSupport } = useGameContext();
+  const [mounted, setMounted] = useState(false);
   const [prestigePanelOpen, setPrestigePanelOpen] = useState(false);
   const [challengePanelOpen, setChallengePanelOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [legacyEarned, setLegacyEarned] = useState<LegacyCalculation | null>(
     null
   );
@@ -50,6 +92,19 @@ const GameApp: React.FC = () => {
     loadPrestigeData()
   );
   const prevStateRef = useRef(state);
+
+  // Modal refs for focus trap
+  const eventModalRef = useRef<HTMLDivElement>(null);
+  const endGameModalRef = useRef<HTMLDivElement>(null);
+
+  // Apply focus trap to modals
+  useFocusTrap(!!state.pendingEvent, eventModalRef);
+  useFocusTrap((state.victory || state.gameOver) && !state.pendingEvent, endGameModalRef);
+
+  // Prevent hydration errors by only rendering after mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // UI Juice hooks
   const { shakeStyle, triggerShake } = useScreenShake();
@@ -73,7 +128,7 @@ const GameApp: React.FC = () => {
     }
   }, [state.lastActionWasCritical, dispatch, triggerShake, emitParticles]);
 
-  // Track stat changes for floating numbers
+  // Track stat changes for floating numbers with responsive positions
   useEffect(() => {
     const prev = prevStateRef.current;
 
@@ -83,20 +138,27 @@ const GameApp: React.FC = () => {
       const fundsDiff = state.funds - prev.funds;
       const riskDiff = state.risk - prev.risk;
 
-      // Calculate average support change
+      // Calculate average support change using memoized previous vs current
       const prevAvgSupport =
         Object.values(prev.support).reduce((a, b) => a + b, 0) /
-        Object.keys(prev.support).length;
-      const currAvgSupport =
-        Object.values(state.support).reduce((a, b) => a + b, 0) /
-        Object.keys(state.support).length;
-      const supportDiff = Math.round(currAvgSupport - prevAvgSupport);
+        Math.max(Object.keys(prev.support).length, 1);
+      const supportDiff = Math.round(avgSupport - prevAvgSupport);
 
-      if (cloutDiff !== 0) addNumber(cloutDiff, "clout", { x: 200, y: 100 });
-      if (fundsDiff !== 0) addNumber(fundsDiff, "funds", { x: 300, y: 100 });
-      if (riskDiff !== 0) addNumber(riskDiff, "risk", { x: 400, y: 100 });
-      if (supportDiff !== 0)
-        addNumber(supportDiff, "support", { x: 500, y: 100 });
+      // Responsive positions - center of viewport with offsets
+      const getResponsivePosition = (index: number) => {
+        const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 800;
+        const baseX = Math.min(viewportWidth * 0.3, 150);
+        const spacing = Math.min(viewportWidth * 0.15, 100);
+        return {
+          x: baseX + (spacing * index),
+          y: 80, // Fixed vertical position below header
+        };
+      };
+
+      if (cloutDiff !== 0) addNumber(cloutDiff, "clout", getResponsivePosition(0));
+      if (fundsDiff !== 0) addNumber(fundsDiff, "funds", getResponsivePosition(1));
+      if (riskDiff !== 0) addNumber(riskDiff, "risk", getResponsivePosition(2));
+      if (supportDiff !== 0) addNumber(supportDiff, "support", getResponsivePosition(3));
     }
 
     // Victory particles
@@ -114,7 +176,7 @@ const GameApp: React.FC = () => {
     }
 
     prevStateRef.current = state;
-  }, [state, addNumber, emitParticles, triggerShake]);
+  }, [state.turn, state.clout, state.funds, state.risk, state.victory, state.streak, avgSupport, addNumber, emitParticles, triggerShake]);
 
   // Calculate legacy points on victory
   useEffect(() => {
@@ -152,6 +214,15 @@ const GameApp: React.FC = () => {
   const availablePoints =
     prestigeData.totalLegacyPoints - prestigeData.spentLegacyPoints;
 
+  // Prevent hydration mismatch by not rendering until client-side
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="text-cyan-400">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={shakeStyle}>
       {/* Floating Numbers & Particles */}
@@ -187,6 +258,18 @@ const GameApp: React.FC = () => {
       <div className="container mx-auto px-4 py-4 pb-20 lg:pb-4">
         {/* Header Buttons */}
         <div className="flex justify-end gap-2 sm:gap-3 mb-2">
+          {/* Help/Tutorial Button */}
+          <motion.button
+            onClick={() => setHelpOpen(true)}
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-lg text-cyan-400 hover:bg-cyan-500/30 transition-colors min-h-[44px]"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            aria-label="Open game tutorial"
+          >
+            <HelpCircle size={18} />
+            <span className="font-medium hidden sm:inline">Help</span>
+          </motion.button>
+
           {/* Daily Challenge Indicator */}
           <DailyChallengeIndicator
             onClick={() => setChallengePanelOpen(true)}
@@ -216,7 +299,7 @@ const GameApp: React.FC = () => {
           </motion.button>
         </div>
 
-        <IntroTutorial />
+        <IntroTutorial onOpenFullTutorial={() => setHelpOpen(true)} />
 
         {/* Mobile Collapsible Stats Bar */}
         <CollapsibleStatsBar
@@ -224,12 +307,14 @@ const GameApp: React.FC = () => {
           clout={state.clout}
           funds={state.funds}
           risk={state.risk}
-          avgSupport={Math.round(
-            Object.values(state.support).reduce((a, b) => a + b, 0) /
-              Object.keys(state.support).length
-          )}
+          avgSupport={avgSupport}
           streak={state.streak}
         />
+
+        {/* Victory Progress Tracker */}
+        <div className="mb-4">
+          <VictoryTracker />
+        </div>
 
         {/* Desktop 3-column layout / Mobile stack */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -294,10 +379,15 @@ const GameApp: React.FC = () => {
         </BottomSheet>
       </div>
 
-      {/* Event Modal */}
+      {/* Event Modal - Accessible with focus trap and ARIA */}
       <AnimatePresence>
         {pendingEvent && (
           <motion.div
+            ref={eventModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-title"
+            aria-describedby="event-description"
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -310,18 +400,25 @@ const GameApp: React.FC = () => {
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ type: "spring", damping: 20 }}
             >
-              <h4 className="text-white text-2xl font-bold mb-3">
+              <h4 id="event-title" className="text-white text-2xl font-bold mb-3">
                 {pendingEvent.title}
               </h4>
-              <p className="text-white/70 mb-4">{pendingEvent.description}</p>
-              <div className="space-y-2">
+              <p id="event-description" className="text-white/70 mb-4">{pendingEvent.description}</p>
+              <div className="space-y-2" role="group" aria-label="Event choices">
                 {pendingEvent.options?.map((opt, idx) => (
                   <motion.button
                     key={idx}
-                    className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-colors"
+                    className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
                     onClick={() => handleEventChoice(idx)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleEventChoice(idx);
+                      }
+                    }}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
+                    aria-label={`Choice ${idx + 1}: ${opt.text}`}
                   >
                     {opt.text}
                   </motion.button>
@@ -332,10 +429,22 @@ const GameApp: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Victory/Game Over Modal */}
+      {/* Comprehensive Tutorial */}
+      <AnimatePresence>
+        {helpOpen && (
+          <ComprehensiveTutorial onClose={() => setHelpOpen(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* Victory/Game Over Modal - Accessible */}
       <AnimatePresence>
         {(state.victory || state.gameOver) && !pendingEvent && (
           <motion.div
+            ref={endGameModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="endgame-title"
+            aria-describedby="endgame-description"
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -350,17 +459,14 @@ const GameApp: React.FC = () => {
             >
               {state.victory && (
                 <>
-                  <motion.div
-                    className="text-6xl mb-4"
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                  >
+                  {/* Victory crown - no infinite animation to save CPU */}
+                  <div className="text-6xl mb-4" aria-hidden="true">
                     👑
-                  </motion.div>
-                  <h3 className="text-yellow-400 text-2xl font-bold mb-2">
+                  </div>
+                  <h3 id="endgame-title" className="text-yellow-400 text-2xl font-bold mb-2">
                     VICTORY!
                   </h3>
-                  <p className="text-white/70 mb-4">
+                  <p id="endgame-description" className="text-white/70 mb-4">
                     You have dominated the culture!
                   </p>
                   <div className="text-sm text-white/50 mb-4">
@@ -402,17 +508,14 @@ const GameApp: React.FC = () => {
               )}
               {state.gameOver && (
                 <>
-                  <motion.div
-                    className="text-6xl mb-4"
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                  >
+                  {/* Game over skull - no infinite animation to save CPU */}
+                  <div className="text-6xl mb-4" aria-hidden="true">
                     💀
-                  </motion.div>
-                  <h3 className="text-red-400 text-2xl font-bold mb-2">
+                  </div>
+                  <h3 id="endgame-title" className="text-red-400 text-2xl font-bold mb-2">
                     GAME OVER
                   </h3>
-                  <p className="text-white/70 mb-4">
+                  <p id="endgame-description" className="text-white/70 mb-4">
                     Your movement has been neutralized.
                   </p>
                   <div className="text-sm text-white/50 mb-4">
@@ -422,10 +525,11 @@ const GameApp: React.FC = () => {
                 </>
               )}
               <motion.button
-                className="px-8 py-3 bg-cyan-500/20 border border-cyan-500/50 rounded-lg text-cyan-400 hover:bg-cyan-500/30 transition-colors inline-block"
+                className="px-8 py-3 bg-cyan-500/20 border border-cyan-500/50 rounded-lg text-cyan-400 hover:bg-cyan-500/30 transition-colors inline-block focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-900"
                 onClick={handleReset}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                aria-label={state.victory ? "Play again" : "Try again"}
               >
                 {state.victory ? "Play Again" : "Try Again"}
               </motion.button>

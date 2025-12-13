@@ -354,14 +354,22 @@ export const actionsConfig: GameActionConfig[] = [
   {
     id: 'fundraise',
     name: 'Fundraise',
-    description: 'Crowdfund from supporters. Returns diminish with overuse.',
-    cost: {}, // Still free, but has diminishing returns
+    description: 'Crowdfund from supporters. Returns diminish and risk scales with overuse.',
+    cost: {}, // Still free, but has diminishing returns and risk scaling
     perform: (state: GameState) => {
-      // Base return, will be modified by diminishing returns system
+      // Risk scales with consecutive uses to prevent spam
+      const consecutiveUses = state.consecutiveActionUses?.fundraise || 0;
+      const baseRisk = 5;
+      const scaledRisk = baseRisk + (consecutiveUses * 3); // 5, 8, 11, 14...
+
+      const message = consecutiveUses > 0
+        ? `Fundraiser complete! Donors are getting fatigued (+${scaledRisk} risk)`
+        : 'Fundraiser complete! Donations collected.';
+
       return {
-        fundsDelta: 40, // Reduced from 50
-        riskDelta: 5, // Increased from 2
-        message: 'Fundraiser complete! Donations collected, but your visibility increased.'
+        fundsDelta: 40, // Will be reduced by diminishing returns
+        riskDelta: scaledRisk,
+        message
       };
     }
   },
@@ -443,27 +451,27 @@ export const actionsConfig: GameActionConfig[] = [
   {
     id: 'debate',
     name: 'Debate Challenge',
-    description: 'High-stakes debate. Requires 30 clout. 40% success rate. 2-turn cooldown.',
-    cost: { funds: 30, clout: 15 }, // Increased costs
+    description: 'High-stakes debate. Requires 30 clout. 50% success rate. 2-turn cooldown.',
+    cost: { funds: 25, clout: 12 }, // Balanced: reduced from 30/15
     perform: (state: GameState) => {
-      // Success rate now 40% (was 60%), but scales with clout
+      // Success rate now 50% base (was 40%), scales with clout
       const cloutBonus = Math.min(state.clout / 200, 0.2); // Up to +20% at 200 clout
-      const successRate = 0.4 + cloutBonus;
+      const successRate = 0.5 + cloutBonus; // 50-70% range
       const success = Math.random() < successRate;
 
       if (success) {
         return {
-          supportDelta: { 'ALL': 5 }, // Reduced from 6
-          cloutDelta: 20, // Reduced from 25
-          riskDelta: 6, // Reduced from 8
+          supportDelta: { 'ALL': 6 },
+          cloutDelta: 18,
+          riskDelta: 5, // Reduced from 6
           message: `Debate victory! (${Math.round(successRate * 100)}% chance succeeded)`
         };
       } else {
         return {
-          supportDelta: { 'ALL': -3 }, // Increased penalty from -2
-          cloutDelta: -10, // Increased penalty from -5
-          riskDelta: 10, // Reduced from 12
-          message: `Debate loss. Your opponent had good talking points.`
+          supportDelta: { 'ALL': -2 }, // Reduced penalty from -3
+          cloutDelta: -5, // Reduced penalty from -10
+          riskDelta: 8, // Reduced from 10
+          message: `Debate loss, but you held your ground.`
         };
       }
     }

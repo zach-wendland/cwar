@@ -97,17 +97,40 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles }) => 
 export const useParticles = () => {
   const [particles, setParticles] = useState<Particle[]>([]);
   const idCounter = useRef(0);
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Clean up particles after animation
+  // Clean up particles after animation with proper memory management
   useEffect(() => {
     if (particles.length === 0) return;
 
-    const timer = setTimeout(() => {
+    // Clear any existing timer to prevent memory leaks
+    if (cleanupTimerRef.current) {
+      clearTimeout(cleanupTimerRef.current);
+    }
+
+    cleanupTimerRef.current = setTimeout(() => {
       setParticles([]);
+      cleanupTimerRef.current = null;
     }, 2500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+        cleanupTimerRef.current = null;
+      }
+    };
   }, [particles]);
+
+  // Cleanup on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+      }
+      // Clear particles on unmount
+      setParticles([]);
+    };
+  }, []);
 
   const emit = useCallback((
     effect: ParticleEffect,

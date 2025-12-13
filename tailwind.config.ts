@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // Dark mode is configured but requires manual toggle implementation
+  // To enable: Add a button that toggles 'dark' class on document.documentElement
   darkMode: ["class"],
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -45,28 +47,43 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
-        // Game-specific colors
+        // Game-specific colors (unified palette)
         cyan: {
-          DEFAULT: "#00d4ff",
-          dim: "rgba(0, 212, 255, 0.15)",
+          DEFAULT: "hsl(var(--game-cyan))",
+          dim: "hsl(var(--game-cyan) / 0.15)",
         },
         purple: {
-          DEFAULT: "#8b5cf6",
-          dim: "rgba(139, 92, 246, 0.15)",
+          DEFAULT: "hsl(var(--game-purple))",
+          dim: "hsl(var(--game-purple) / 0.15)",
         },
         green: {
-          DEFAULT: "#10b981",
-          dim: "rgba(16, 185, 129, 0.15)",
+          DEFAULT: "hsl(var(--game-green))",
+          dim: "hsl(var(--game-green) / 0.15)",
         },
         red: {
-          DEFAULT: "#ef4444",
-          dim: "rgba(239, 68, 68, 0.15)",
+          DEFAULT: "hsl(var(--game-red))",
+          dim: "hsl(var(--game-red) / 0.15)",
         },
-        yellow: {
-          DEFAULT: "#f59e0b",
-          dim: "rgba(245, 158, 11, 0.15)",
+        amber: {
+          DEFAULT: "hsl(var(--game-amber))",
+          dim: "hsl(var(--game-amber) / 0.15)",
         },
-        gold: "#fbbf24",
+        gold: "hsl(var(--game-gold))",
+        // Semantic Risk Zone Colors
+        risk: {
+          safe: "hsl(var(--risk-safe))",
+          caution: "hsl(var(--risk-caution))",
+          danger: "hsl(var(--risk-danger))",
+          critical: "hsl(var(--risk-critical))",
+        },
+        // Support Level Colors
+        support: {
+          negligible: "hsl(var(--support-negligible))",
+          emerging: "hsl(var(--support-emerging))",
+          growing: "hsl(var(--support-growing))",
+          solid: "hsl(var(--support-solid))",
+          dominant: "hsl(var(--support-dominant))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
