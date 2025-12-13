@@ -23,6 +23,7 @@ import {
   applySentimentDecay,
   generateSentimentWarnings,
   checkSentimentEvents,
+  getSentimentEffectMultiplier,
 } from './sentimentEngine';
 import {
   applySentimentToSupportChange,
@@ -539,6 +540,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Apply advisor ability bonuses
       outcome = applyAdvisorBonus(outcome, config.id, advisorNames);
+
+      // Apply sentiment multiplier to clout gains (Sprint 6a: Social Pulse)
+      // Coalition mood affects how much clout you gain - enthusiastic = 1.3x, hostile = 0.4x
+      const sentimentMultiplier = getSentimentEffectMultiplier(state.sentiment);
+      if (outcome.cloutDelta && outcome.cloutDelta > 0) {
+        outcome = {
+          ...outcome,
+          cloutDelta: Math.round(outcome.cloutDelta * sentimentMultiplier),
+        };
+      }
 
       // Apply outcome to state
       const newSupport = { ...state.support };

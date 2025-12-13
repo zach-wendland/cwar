@@ -1,6 +1,13 @@
 // generators.ts - simulate content generation (events, advisors, social posts) via LLM or static logic
 
 import { GameState, GameEvent, Advisor, Tweet } from './GameContext';
+import {
+  FactionReaction,
+  SentimentState,
+  FACTION_DISPLAY_NAMES,
+  MOOD_THRESHOLDS,
+  MoodLevel,
+} from './sentimentEngine';
 
 // Event categories for organization and weighting
 export type EventCategory = 'tech' | 'media' | 'political' | 'economic' | 'cultural';
@@ -1730,4 +1737,146 @@ export function generateTweets(lastActionName: string): Tweet[] {
     { user: randomHandle(), content: shuffled[1] },
     { user: randomHandle(), content: shuffled[2] }
   ];
+}
+
+// =========================
+// SENTIMENT-AWARE SOCIAL FEED (Sprint 6a)
+// =========================
+
+// Faction-specific Twitter handles
+const FACTION_HANDLES: Record<string, string[]> = {
+  'tech-elite': ['@SiliconValleyVC', '@TechBroChad', '@AIOptimist2025'],
+  'rural-heartland': ['@FarmCountryUSA', '@HeartlandMom', '@TractorTruth'],
+  'urban-progressive': ['@BrooklynActivist', '@UrbanOrganizer', '@CityRising'],
+  'corporate-establishment': ['@FortuneInsider', '@WallStObserver', '@BoardroomBeat'],
+  'media-influencers': ['@ViralTakes', '@MainstreamMike', '@ClickbaitKing'],
+  'grassroots-activists': ['@DoorKnockerDan', '@GrassrootsGrind', '@PeoplesPower'],
+};
+
+// Mood-specific reaction templates
+const MOOD_REACTIONS: Record<MoodLevel, { positive: string[]; negative: string[] }> = {
+  ENTHUSIASTIC: {
+    positive: [
+      "THIS IS EXACTLY WHAT WE NEEDED! 🔥🔥🔥",
+      "We're ALL IN on this! The movement is unstoppable!",
+      "Our people are FIRED UP! This changes everything!",
+      "Incredible move! The momentum is building fast!",
+    ],
+    negative: [
+      "Wait, what?! This doesn't match our energy AT ALL!",
+      "We were so hyped... and then this happens?!",
+      "Our coalition is confused - why pivot now?",
+    ],
+  },
+  ENGAGED: {
+    positive: [
+      "Solid move. This resonates with our base.",
+      "We can work with this. Good direction.",
+      "Finally, someone who gets what we need.",
+      "This is the kind of action we've been waiting for.",
+    ],
+    negative: [
+      "Not thrilled about this direction, tbh.",
+      "We expected better. Disappointing.",
+      "This isn't what we signed up for.",
+    ],
+  },
+  APATHETIC: {
+    positive: [
+      "Hm, okay. Maybe there's hope after all.",
+      "*yawns* Fine, I guess this is something.",
+      "Cautiously optimistic... for now.",
+    ],
+    negative: [
+      "Whatever. We're checked out at this point.",
+      "Hard to care anymore. Just noise.",
+      "Wake us when something actually changes.",
+    ],
+  },
+  HOSTILE: {
+    positive: [
+      "Wait... is this actually good? We're suspicious.",
+      "Don't think this makes up for everything else.",
+      "Too little, too late. But fine.",
+    ],
+    negative: [
+      "This is EXACTLY why we can't trust this campaign!",
+      "Betrayal confirmed. We're organizing against this.",
+      "Our worst fears confirmed. Never again.",
+      "We warned everyone. Now they'll see.",
+    ],
+  },
+};
+
+/**
+ * Generate sentiment-aware tweets that reflect faction moods and reactions
+ * This makes the social feed mechanically meaningful - players can read faction health
+ */
+export function generateSentimentTweets(
+  actionName: string,
+  factionReactions: FactionReaction[],
+  sentimentState: SentimentState
+): Tweet[] {
+  const tweets: Tweet[] = [];
+
+  // Generate tweets from factions that reacted
+  for (const reaction of factionReactions.slice(0, 2)) {
+    const factionHandles = FACTION_HANDLES[reaction.factionId] || ['@Anonymous'];
+    const handle = factionHandles[Math.floor(Math.random() * factionHandles.length)];
+    const moodInfo = MOOD_THRESHOLDS[sentimentState.factions[reaction.factionId]?.mood || 'ENGAGED'];
+
+    // Create faction-attributed tweet with mood indicator
+    const moodEmoji = moodInfo.icon;
+    const factionName = FACTION_DISPLAY_NAMES[reaction.factionId] || reaction.factionId;
+
+    tweets.push({
+      user: handle,
+      content: `${moodEmoji} [${factionName}] ${reaction.message}`,
+    });
+  }
+
+  // Add 1-2 general reaction tweets to fill the feed
+  const generalHandles = [
+    '@DOGEPatriot47', '@DarkMAGA_Dana', '@GroyperKing', '@IndivisibleNow',
+    '@FreeLuigiBot', '@TuckerFanAccount', '@BannonWarRoom', '@ResistanceRises'
+  ];
+
+  const generalReactions = [
+    `The "${actionName}" discourse is heating up. Everyone's watching.`,
+    `${actionName} trending for all the wrong reasons... or right ones?`,
+    `My timeline is split 50/50 on "${actionName}". Classic culture war.`,
+    `The algorithm is LOVING this "${actionName}" content. Engagement through the roof.`,
+  ];
+
+  const numGeneral = Math.max(1, 3 - tweets.length);
+  for (let i = 0; i < numGeneral; i++) {
+    tweets.push({
+      user: generalHandles[Math.floor(Math.random() * generalHandles.length)],
+      content: generalReactions[Math.floor(Math.random() * generalReactions.length)],
+    });
+  }
+
+  return tweets.slice(0, 3);
+}
+
+/**
+ * Generate a tweet reflecting a faction's current mood (for Social Pulse display)
+ */
+export function generateFactionMoodTweet(
+  factionId: string,
+  mood: MoodLevel,
+  impact: number
+): Tweet {
+  const handles = FACTION_HANDLES[factionId] || ['@Coalition'];
+  const handle = handles[Math.floor(Math.random() * handles.length)];
+  const reactions = MOOD_REACTIONS[mood];
+  const pool = impact >= 0 ? reactions.positive : reactions.negative;
+  const content = pool[Math.floor(Math.random() * pool.length)];
+  const moodEmoji = MOOD_THRESHOLDS[mood].icon;
+  const factionName = FACTION_DISPLAY_NAMES[factionId] || factionId;
+
+  return {
+    user: handle,
+    content: `${moodEmoji} [${factionName}] ${content}`,
+  };
 }
