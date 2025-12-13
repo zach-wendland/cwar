@@ -1076,6 +1076,475 @@ const EVENT_POOL: EventTemplate[] = [
       riskDelta: 3,
       message: 'Perfect timing! The cultural moment amplifies your message.'
     }
+  },
+
+  // =========================
+  // LATE DECEMBER 2025 - JUDGE-APPROVED VIRAL EVENTS
+  // =========================
+  {
+    id: 'target_dual_boycott_2025',
+    category: 'economic',
+    title: 'Target Faces Dual Boycotts: $12.4B Market Value Evaporates',
+    description: 'Target Corporation hemorrhages market value as simultaneous boycotts erupt. Conservatives rage over DEI initiatives while progressives condemn "performative allyship." The CEO\'s apology tour satisfies no one. Your advisors are screaming contradictory advice.',
+    minTurn: 5,
+    maxRisk: 85,
+    options: [
+      {
+        text: 'Support the Conservative Boycott: "Get woke, go broke!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 5,
+          riskDelta: 8,
+          message: 'MAGA influencers amplify your stance. LGBT groups launch counter-campaign. Corporate America watches nervously.'
+        }
+      },
+      {
+        text: 'Support the Progressive Boycott: "Rainbow capitalism must end!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 4,
+          riskDelta: 9,
+          message: 'Progressive activists praise your "authentic" stance. Conservative media calls you a "corporate terrorist."'
+        }
+      },
+      {
+        text: 'Condemn BOTH Boycotts: "This is economic terrorism!"',
+        outcome: {
+          supportDelta: { 'ALL': -3 },
+          cloutDelta: -8,
+          riskDelta: 15,
+          message: 'You\'ve united left and right... in despising you. Social media roasts you from all angles. At least the memes are funny?'
+        }
+      },
+      {
+        text: 'Launch "Buy American" Counter-Campaign',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          fundsDelta: -40,
+          cloutDelta: 6,
+          riskDelta: 5,
+          message: 'Rust Belt loves your economic nationalism. Coastal elites call it "jingoistic." You\'ve successfully changed the subject.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'h1b_musk_bannon_war_2025',
+    category: 'political',
+    title: 'H1-B Civil War: Musk vs Bannon, Trump Picks a Side',
+    description: 'The MAGA coalition fractures as Elon Musk demands more H1-B visas for tech workers while Steve Bannon denounces "tech oligarch betrayal." Trump sides with Musk, calling Bannon "overrated." Nationalist influencers are in open revolt.',
+    minTurn: 8,
+    maxRisk: 70,
+    options: [
+      {
+        text: 'Side with Musk: "We need the best talent!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 8,
+          fundsDelta: 30,
+          riskDelta: 12,
+          message: 'Silicon Valley donors open their wallets. Nationalist base calls you a "globalist traitor." Groypers spam your mentions.'
+        }
+      },
+      {
+        text: 'Side with Bannon: "America First means Americans FIRST!"',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 7,
+          riskDelta: 14,
+          message: 'Nationalist influencers rally to your banner. Tech billionaires call you "economically illiterate."'
+        }
+      },
+      {
+        text: 'Thread the Needle: "Merit-based with American training requirements"',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          cloutDelta: -3,
+          riskDelta: 6,
+          message: 'Your carefully crafted position satisfies no one but confuses everyone. The discourse moves on.'
+        }
+      },
+      {
+        text: 'Exploit the Chaos: Launch "Tech Exodus" fundraiser',
+        outcome: {
+          supportDelta: { 'ALL': -1 },
+          cloutDelta: -10,
+          fundsDelta: 80,
+          riskDelta: 10,
+          message: 'You raised money off the chaos while contributing nothing. Very on-brand for 2025 politics. Cynicism pays.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'x_location_foreign_maga_2025',
+    category: 'tech',
+    title: 'X Geolocation Exposes Foreign "MAGA Patriots"',
+    description: 'A new X feature displays posting locations. Top "MAGA Warriors" with 400K+ followers are suddenly geolocated to India, Nigeria, and Pakistan. Screenshots go viral. Defenders claim VPNs, but the damage is done.',
+    minTurn: 4,
+    maxRisk: 90,
+    options: [
+      {
+        text: 'Weaponize This: "See? Foreign interference is REAL!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 9,
+          riskDelta: 13,
+          message: 'Liberal media amplifies your "told you so" tour. MAGA figures claim you\'re working for the Deep State.'
+        }
+      },
+      {
+        text: 'Defend the Accounts: "VPNs exist, this is a witch hunt!"',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          cloutDelta: -5,
+          riskDelta: 16,
+          message: 'MAGA influencers appreciate your loyalty. Fact-checkers have a field day with your claims.'
+        }
+      },
+      {
+        text: 'Both-Sides This: "ALL sides use bots, let\'s talk real issues"',
+        outcome: {
+          supportDelta: { 'ALL': -2 },
+          cloutDelta: -4,
+          riskDelta: 7,
+          message: 'Your enlightened centrist take pleases only NPR listeners. The discourse continues without you.'
+        }
+      },
+      {
+        text: 'Launch "Verify American" App',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          fundsDelta: -50,
+          cloutDelta: 5,
+          riskDelta: 11,
+          message: 'Your grifter instincts pay off. Swing state voters love the "authenticity verification." Privacy advocates are horrified.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'raw_milk_bird_flu_2025',
+    category: 'cultural',
+    title: 'Raw Milk Bird Flu: 5 Cats Dead, RFK Jr Defends "Freedom"',
+    description: 'An outbreak of bird flu-contaminated raw milk leaves 5 cats dead and 12 humans hospitalized. RFK Jr\'s HHS issues a statement defending "bodily autonomy" and "traditional foodways." Veterinarians are screaming. Pet owners are terrified.',
+    minTurn: 6,
+    maxRisk: 75,
+    minSupport: 30,
+    options: [
+      {
+        text: 'Demand Federal Ban: "This is what deregulation gets us!"',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 6,
+          riskDelta: 10,
+          message: 'Public health advocates praise your courage. Rural states accuse you of "nanny state tyranny."'
+        }
+      },
+      {
+        text: 'Defend Raw Milk: "Personal choice, personal responsibility!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: -7,
+          riskDelta: 18,
+          message: 'Libertarian influencers love you. Pediatricians are horrified. Twitter adds context notes to your posts.'
+        }
+      },
+      {
+        text: 'Blame RFK Jr: "Unqualified leadership kills animals!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 8,
+          riskDelta: 9,
+          message: 'Mainstream media amplifies your attack. RFK supporters call you a "pharma shill."'
+        }
+      },
+      {
+        text: 'Pivot to Factory Farming: "This is why we need food system reform!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          fundsDelta: -35,
+          cloutDelta: 3,
+          riskDelta: 6,
+          message: 'Progressive food activists embrace you. Rural America rolls their eyes. You\'ve changed the subject.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'doge_musk_failure_2025',
+    category: 'political',
+    title: 'DOGE Admits Defeat: Musk Says "Wouldn\'t Do It Again"',
+    description: 'After months of hype, Elon Musk admits DOGE was "only somewhat successful" and he "wouldn\'t do it again." Government waste persists. Bureaucrats gloat. The techno-solutionist narrative collapses.',
+    minTurn: 10,
+    maxRisk: 60,
+    options: [
+      {
+        text: 'Pile On: "Billionaires can\'t just \'disrupt\' democracy!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 7,
+          riskDelta: 8,
+          message: 'Liberal wonks celebrate your vindication. Musk fans call you a "regime loyalist."'
+        }
+      },
+      {
+        text: 'Defend Musk: "At least he tried! Better than career politicians!"',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          cloutDelta: -4,
+          riskDelta: 11,
+          message: 'Tech bros appreciate your loyalty. Government workers mock you for defending failure.'
+        }
+      },
+      {
+        text: 'Propose Your Own Plan: "We need REAL reform, not tech stunts"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: -20,
+          fundsDelta: 40,
+          riskDelta: 7,
+          message: 'Your 10-point plan goes viral. Wonks debate it seriously. You\'re now a "serious policy thinker."'
+        }
+      },
+      {
+        text: 'Ignore & Pivot to Border Crisis',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          fundsDelta: -25,
+          cloutDelta: 2,
+          riskDelta: 5,
+          message: 'You\'ve successfully changed the subject. The news cycle moves on. Strategic cowardice works.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'mtg_trump_civil_war_2025',
+    category: 'political',
+    title: 'MTG vs Trump: "Traitor" Label Sparks MAGA Civil War',
+    description: 'Trump labels MTG a "traitor" and "lunatic" after she demands Epstein files and criticizes his tariffs. MTG announces resignation from Congress, citing 773 death threats - now coming from the RIGHT. Trump dismisses her: "Nobody cares about her."',
+    minTurn: 7,
+    options: [
+      {
+        text: 'Side with Trump: "She was never really MAGA!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 5,
+          riskDelta: 10,
+          message: 'Trump loyalists embrace you. Former MTG fans accuse you of betrayal. The circular firing squad continues.'
+        }
+      },
+      {
+        text: 'Defend MTG: "She deserves better than death threats!"',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          cloutDelta: -8,
+          riskDelta: 15,
+          message: 'You\'ve stepped into the crossfire. Both camps are now suspicious of you. Brave, but costly.'
+        }
+      },
+      {
+        text: 'Call for Unity: "We\'re tearing ourselves apart!"',
+        outcome: {
+          supportDelta: { 'ALL': -1 },
+          cloutDelta: -5,
+          riskDelta: 8,
+          message: 'Your call for peace is ignored. Both sides see you as weak. The drama continues without you.'
+        }
+      },
+      {
+        text: 'Demand Epstein Files: "Release everything - no exceptions!"',
+        outcome: {
+          supportDelta: { 'ALL': 6 },
+          cloutDelta: 15,
+          riskDelta: 20,
+          message: 'Conspiracy theorists LOVE you. Mainstream media notices you. You\'ve just painted a massive target on yourself.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'meta_kills_factchecking_2025',
+    category: 'tech',
+    title: 'Meta Kills Fact-Checking: "We Embrace Mistakes"',
+    description: 'Mark Zuckerberg announces Meta will stop fact-checking, admitting 10-20% of daily content removals were "mistakes." Misinformation flows freely. FTC launches inquiry. Your campaign could thrive or drown in the chaos.',
+    minTurn: 3,
+    options: [
+      {
+        text: 'Celebrate: "Finally, free speech on social media!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 12,
+          riskDelta: 15,
+          message: 'Your viral misinfo potential skyrockets. Responsible media calls you dangerous. Freedom tastes like dopamine.'
+        }
+      },
+      {
+        text: 'Condemn: "This is how democracies die!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 5,
+          riskDelta: 8,
+          message: 'Legacy media amplifies your concern. Tech libertarians call you a censorship apologist.'
+        }
+      },
+      {
+        text: 'Start Your Own Fact-Check Squad',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          fundsDelta: -50,
+          cloutDelta: 8,
+          riskDelta: 10,
+          message: 'Your "independent verification" gains traction. Critics say you\'re just pushing your own narrative. They\'re not wrong.'
+        }
+      },
+      {
+        text: 'Exploit the Void: Flood zone with your messaging',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 15,
+          riskDelta: 18,
+          message: 'Without fact-checkers, your unverified claims spread like wildfire. Backlash is coming, but not today.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'luigi_trial_2025',
+    category: 'cultural',
+    title: 'Luigi Mangione Trial: The CEO Killer Cult',
+    description: 'The Luigi Mangione evidence hearing enters Day 7. Defense argues illegal search, prosecution fights to keep the gun and manifesto. Online, Luigi has become a folk hero. Healthcare discourse explodes. Your take will define you.',
+    minTurn: 5,
+    options: [
+      {
+        text: 'Call him a "Freedom Fighter": Lean into the chaos',
+        outcome: {
+          supportDelta: { 'ALL': 6 },
+          cloutDelta: 20,
+          riskDelta: 25,
+          message: 'The radical left LOVES you. Mainstream media is horrified. You\'ve just endorsed political violence. Bold move.'
+        }
+      },
+      {
+        text: 'Condemn Political Violence: "Murder is never justified"',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          cloutDelta: 2,
+          riskDelta: 5,
+          message: 'Safe and boring. Your base wanted edge. At least you won\'t get investigated.'
+        }
+      },
+      {
+        text: 'Focus on Healthcare: "This is what happens when the system fails"',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 10,
+          riskDelta: 10,
+          message: 'You\'ve threaded the needle. Healthcare reform gets trending. You look thoughtful, not crazy.'
+        }
+      },
+      {
+        text: 'Post Luigi Memes Ironically',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 18,
+          riskDelta: 15,
+          message: 'Plausible deniability is a beautiful thing. "It\'s just a meme, bro." Lawyers are on standby.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'white_house_media_tracker_2025',
+    category: 'media',
+    title: 'White House Launches "Media Offender" Tracker',
+    description: 'The administration creates an official government portal naming journalists and labeling coverage as "lies" and "left-wing lunacy." State Department starts denying visas to fact-checkers. Press freedom groups are in panic mode.',
+    minTurn: 6,
+    options: [
+      {
+        text: 'Endorse the Tracker: "Finally, accountability for fake news!"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 10,
+          riskDelta: 12,
+          message: 'MAGA base cheers. Journalists add you to THEIR lists. You\'re now part of the story.'
+        }
+      },
+      {
+        text: 'Defend Press Freedom: "This is authoritarianism 101!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 5,
+          riskDelta: 8,
+          message: 'Legacy media loves you. Conservative base thinks you\'ve gone soft. Principles cost support.'
+        }
+      },
+      {
+        text: 'Create Your Own "Biased Journalist" List as Satire',
+        outcome: {
+          supportDelta: { 'ALL': 5 },
+          cloutDelta: 15,
+          riskDelta: 15,
+          message: 'Your satirical list goes viral. Some people don\'t get the joke. Poe\'s Law strikes again.'
+        }
+      },
+      {
+        text: 'Stay Silent: Let others fight this battle',
+        outcome: {
+          supportDelta: { 'ALL': -2 },
+          cloutDelta: -5,
+          riskDelta: 5,
+          message: 'Cowardice is noted by all sides. Sometimes the best move is no move. This wasn\'t one of those times.'
+        }
+      }
+    ]
+  },
+  {
+    id: 'texas_bathroom_bill_2025',
+    category: 'political',
+    title: 'Texas Bathroom Bill: First Arrest at State Capitol',
+    description: 'SB 8 goes into effect requiring bathrooms based on "biological sex." Trans activist Ry Vazquez receives criminal trespass citation at the Capitol. DPS officers enforce inconsistently. Protesters call it "unenforceable chaos."',
+    minTurn: 4,
+    options: [
+      {
+        text: 'Support the Law: "Protect women\'s spaces!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 5,
+          riskDelta: 10,
+          message: 'Conservative base energized. LGBT allies are done with you. The culture war claims another victim.'
+        }
+      },
+      {
+        text: 'Oppose the Law: "Government doesn\'t belong in bathrooms!"',
+        outcome: {
+          supportDelta: { 'ALL': 3 },
+          cloutDelta: 4,
+          riskDelta: 12,
+          message: 'Libertarians appreciate the consistency. Social conservatives think you\'ve betrayed them.'
+        }
+      },
+      {
+        text: 'Mock the Enforcement: "Bathroom police checking IDs?"',
+        outcome: {
+          supportDelta: { 'ALL': 4 },
+          cloutDelta: 12,
+          riskDelta: 8,
+          message: 'Your satire goes viral. Both sides are mocked. You\'ve risen above the discourse. For now.'
+        }
+      },
+      {
+        text: 'Propose Single-Stall Solution',
+        outcome: {
+          supportDelta: { 'ALL': 2 },
+          fundsDelta: -40,
+          cloutDelta: 3,
+          riskDelta: 5,
+          message: 'A boring, practical solution. Nobody\'s excited, but nobody\'s mad. The discourse moves elsewhere.'
+        }
+      }
+    ]
   }
 ];
 
