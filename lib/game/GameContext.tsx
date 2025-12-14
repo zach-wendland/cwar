@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useReducer } from 'react';
-import { generateAdvisors, generateEvent, generateTweets, resetEventTracking } from './generators';
+import { generateAdvisors, generateEvent, generateTweets, resetEventTracking, generateForeshadowingHint, generateEventPreview, getEventForQueue, EventCategory } from './generators';
 import { tryStartChain, progressChain, resetChainTracking, hasActiveChain, getActiveChainEvent, ChainedGameEvent } from './eventChains';
 import {
   actionsConfig,
@@ -86,6 +86,8 @@ export interface GameEvent {
   chainId?: string;
   stepId?: string;
   isChainEvent?: boolean;
+  // Foreshadowing metadata (Sprint 7)
+  isPrepared?: boolean;
 }
 
 export interface Tweet {
@@ -188,6 +190,10 @@ export interface GameState {
   // Advisor consultation system (Sprint 6b)
   advisorCooldowns: { [advisorName: string]: number };
   consultedAdvisor: string | null;
+  // Event foreshadowing system (Sprint 7)
+  upcomingEvents: { event: GameEvent; turnsUntil: number; eventId: string }[];
+  foreshadowingHints: string[];
+  investigatedEventIds: string[];
 }
 
 // Actions for the reducer
@@ -205,7 +211,8 @@ type GameAction =
   | { type: 'COMPLETE_TUTORIAL_STEP'; step: TutorialStep }
   | { type: 'SET_TUTORIAL_STEP'; step: TutorialStep | null }
   | { type: 'MARK_FEATURE_SEEN'; feature: keyof TutorialState['firstTimeFeatures'] }
-  | { type: 'CONSULT_ADVISOR'; advisorName: string };
+  | { type: 'CONSULT_ADVISOR'; advisorName: string }
+  | { type: 'INVESTIGATE_EVENT'; eventId: string };
 
 // Critical hit chance (nerfed from 10% to 8%)
 const CRITICAL_HIT_CHANCE = 0.08;
@@ -292,6 +299,10 @@ function createInitialState(): GameState {
     // Advisor consultation system (Sprint 6b)
     advisorCooldowns: {},
     consultedAdvisor: null,
+    // Event foreshadowing system (Sprint 7)
+    upcomingEvents: [],
+    foreshadowingHints: [],
+    investigatedEventIds: [],
   };
 }
 
@@ -471,6 +482,11 @@ function getDefeatMessage(type: DefeatType): string {
 const ADVISOR_COOLDOWN_TURNS = 3; // Turns before advisor can be consulted again
 const CONSULTATION_BONUS_MULTIPLIER = 1.25; // 25% bonus to next action
 
+// Event foreshadowing constants (Sprint 7)
+const FORESHADOW_TURNS_AHEAD = 2; // Events appear in queue 2 turns before triggering
+const PREPARED_BONUS_MULTIPLIER = 1.15; // +15% better outcomes when prepared
+const INVESTIGATION_CLOUT_COST = 10; // Cost to investigate an upcoming event
+
 // Tick advisor cooldowns (reduce by 1 each turn)
 function tickAdvisorCooldowns(cooldowns: { [name: string]: number }): { [name: string]: number } {
   const newCooldowns: { [name: string]: number } = {};
@@ -481,6 +497,72 @@ function tickAdvisorCooldowns(cooldowns: { [name: string]: number }): { [name: s
     }
   }
   return newCooldowns;
+}
+
+// =========================
+// EVENT FORESHADOWING HELPERS (Sprint 7)
+// =========================
+
+interface QueuedEvent {
+  event: GameEvent;
+  turnsUntil: number;
+  eventId: string;
+  category?: EventCategory;
+}
+
+// Tick event queue (reduce turnsUntil by 1)
+function tickEventQueue(queue: QueuedEvent[]): QueuedEvent[] {
+  return queue.map(q => ({
+    ...q,
+    turnsUntil: q.turnsUntil - 1,
+  }));
+}
+
+// Get event ready to trigger (turnsUntil <= 0)
+function getReadyEvent(queue: QueuedEvent[]): QueuedEvent | null {
+  return queue.find(q => q.turnsUntil <= 0) || null;
+}
+
+// Remove triggered event from queue
+function removeEventFromQueue(queue: QueuedEvent[], eventId: string): QueuedEvent[] {
+  return queue.filter(q => q.eventId !== eventId);
+}
+
+// Try to queue a new event for foreshadowing
+function tryQueueEvent(
+  state: GameState,
+  currentQueue: QueuedEvent[]
+): { newQueue: QueuedEvent[]; hints: string[]; newTweet: { user: string; content: string } | null } {
+  // Don't queue more than 2 events at a time
+  if (currentQueue.length >= 2) {
+    return { newQueue: currentQueue, hints: [], newTweet: null };
+  }
+
+  // 25% chance to queue a new event each turn (after turn 5)
+  if (state.turn < 5 || Math.random() >= 0.25) {
+    return { newQueue: currentQueue, hints: [], newTweet: null };
+  }
+
+  const eventData = getEventForQueue(state);
+  if (!eventData) {
+    return { newQueue: currentQueue, hints: [], newTweet: null };
+  }
+
+  const newQueuedEvent: QueuedEvent = {
+    event: eventData.event,
+    turnsUntil: FORESHADOW_TURNS_AHEAD,
+    eventId: eventData.eventId,
+    category: eventData.category,
+  };
+
+  // Generate foreshadowing hint
+  const hintTweet = generateForeshadowingHint(eventData.category, eventData.event.title);
+
+  return {
+    newQueue: [...currentQueue, newQueuedEvent],
+    hints: [`🔮 Whispers in the network hint at something coming...`],
+    newTweet: hintTweet,
+  };
 }
 
 // Reducer to handle game state transitions
@@ -721,14 +803,34 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const tweets = generateTweets(config.name);
       newState.socialFeed = [...state.socialFeed, ...tweets];
 
+      // =========================
+      // EVENT FORESHADOWING SYSTEM (Sprint 7)
+      // =========================
+
+      // 1. Tick the event queue (reduce turnsUntil for all queued events)
+      let updatedQueue = tickEventQueue(state.upcomingEvents);
+
+      // 2. Check for ready events from queue (turnsUntil <= 0)
+      const readyQueuedEvent = getReadyEvent(updatedQueue);
+      let isPrepared = false;
+
       // Possibly trigger a dynamic event
-      // First check for active chain events, then try to start new chains, then regular events
+      // Priority: chain events > queued events > turn 3 guaranteed > random events
       let event: GameEvent | null = null;
 
       // Check for continuation of active chain
       const activeChainEvent = getActiveChainEvent(newState);
       if (activeChainEvent) {
         event = activeChainEvent;
+      } else if (readyQueuedEvent) {
+        // Use queued event (foreshadowed)
+        event = readyQueuedEvent.event;
+        isPrepared = state.investigatedEventIds.includes(readyQueuedEvent.eventId);
+        updatedQueue = removeEventFromQueue(updatedQueue, readyQueuedEvent.eventId);
+
+        if (isPrepared) {
+          newState.newsLog.push('✅ PREPARED: Your investigation pays off! +15% better outcomes.');
+        }
       } else if (newTurn === 3) {
         // Turn 3: guaranteed event (delayed to give players time to orient)
         event = generateEvent(newState);
@@ -743,25 +845,47 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
+      // 3. Try to queue new events for future foreshadowing
+      const queueResult = tryQueueEvent(newState, updatedQueue);
+      updatedQueue = queueResult.newQueue;
+      if (queueResult.newTweet) {
+        newState.socialFeed = [...newState.socialFeed, queueResult.newTweet];
+      }
+      if (queueResult.hints.length > 0) {
+        newState.newsLog.push(...queueResult.hints);
+      }
+
+      // Update queue in state
+      newState.upcomingEvents = updatedQueue;
+      newState.foreshadowingHints = queueResult.hints;
+
       if (event) {
         if (event.options && event.options.length > 0) {
-          newState.pendingEvent = event;
+          // For prepared events with options, we'll apply the bonus when they resolve
+          // Store the prepared state in the event
+          const eventWithPrepared = isPrepared ? { ...event, isPrepared: true } : event;
+          newState.pendingEvent = eventWithPrepared;
         } else {
-          if (event.outcome) {
-            if (event.outcome.supportDelta) {
-              for (const s in event.outcome.supportDelta) {
+          // Auto-resolve events - apply prepared bonus to positive outcomes
+          let outcome = event.outcome;
+          if (outcome && isPrepared) {
+            outcome = applyOutcomeWithMultiplier(outcome, PREPARED_BONUS_MULTIPLIER);
+          }
+          if (outcome) {
+            if (outcome.supportDelta) {
+              for (const s in outcome.supportDelta) {
                 if (s === 'ALL') {
                   for (const code in newState.support) {
-                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (event.outcome.supportDelta[s] || 0)));
+                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (outcome.supportDelta[s] || 0)));
                   }
                 } else if (newState.support[s] !== undefined) {
-                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + event.outcome.supportDelta[s]));
+                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + outcome.supportDelta[s]));
                 }
               }
             }
-            if (event.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + event.outcome.cloutDelta);
-            if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
-            if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
+            if (outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + outcome.cloutDelta);
+            if (outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + outcome.fundsDelta);
+            if (outcome.riskDelta) newState.risk = Math.max(0, newState.risk + outcome.riskDelta);
           }
           newState.newsLog.push(`${event.title}: ${event.description}`);
         }
@@ -1061,12 +1185,32 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
+      // =========================
+      // EVENT FORESHADOWING SYSTEM (Sprint 7)
+      // =========================
+
+      // 1. Tick the event queue (reduce turnsUntil for all queued events)
+      let updatedQueueSpin = tickEventQueue(state.upcomingEvents);
+
+      // 2. Check for ready events from queue (turnsUntil <= 0)
+      const readyQueuedEventSpin = getReadyEvent(updatedQueueSpin);
+      let isPreparedSpin = false;
+
       // Possibly trigger a dynamic event
       let event: GameEvent | null = null;
 
       const activeChainEvent = getActiveChainEvent(newState);
       if (activeChainEvent) {
         event = activeChainEvent;
+      } else if (readyQueuedEventSpin) {
+        // Use queued event (foreshadowed)
+        event = readyQueuedEventSpin.event;
+        isPreparedSpin = state.investigatedEventIds.includes(readyQueuedEventSpin.eventId);
+        updatedQueueSpin = removeEventFromQueue(updatedQueueSpin, readyQueuedEventSpin.eventId);
+
+        if (isPreparedSpin) {
+          newState.newsLog.push('✅ PREPARED: Your investigation pays off! +15% better outcomes.');
+        }
       } else if (newTurn === 3) {
         // Turn 3: guaranteed event (delayed to give players time to orient)
         event = generateEvent(newState);
@@ -1079,25 +1223,44 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
+      // 3. Try to queue new events for future foreshadowing
+      const queueResultSpin = tryQueueEvent(newState, updatedQueueSpin);
+      updatedQueueSpin = queueResultSpin.newQueue;
+      if (queueResultSpin.newTweet) {
+        newState.socialFeed = [...newState.socialFeed, queueResultSpin.newTweet];
+      }
+      if (queueResultSpin.hints.length > 0) {
+        newState.newsLog.push(...queueResultSpin.hints);
+      }
+
+      // Update queue in state
+      newState.upcomingEvents = updatedQueueSpin;
+      newState.foreshadowingHints = queueResultSpin.hints;
+
       if (event) {
         if (event.options && event.options.length > 0) {
-          newState.pendingEvent = event;
+          const eventWithPreparedSpin = isPreparedSpin ? { ...event, isPrepared: true } : event;
+          newState.pendingEvent = eventWithPreparedSpin;
         } else {
-          if (event.outcome) {
-            if (event.outcome.supportDelta) {
-              for (const s in event.outcome.supportDelta) {
+          let outcomeSpin = event.outcome;
+          if (outcomeSpin && isPreparedSpin) {
+            outcomeSpin = applyOutcomeWithMultiplier(outcomeSpin, PREPARED_BONUS_MULTIPLIER);
+          }
+          if (outcomeSpin) {
+            if (outcomeSpin.supportDelta) {
+              for (const s in outcomeSpin.supportDelta) {
                 if (s === 'ALL') {
                   for (const code in newState.support) {
-                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (event.outcome.supportDelta[s] || 0)));
+                    newState.support[code] = Math.max(0, Math.min(100, newState.support[code] + (outcomeSpin.supportDelta[s] || 0)));
                   }
                 } else if (newState.support[s] !== undefined) {
-                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + event.outcome.supportDelta[s]));
+                  newState.support[s] = Math.max(0, Math.min(100, newState.support[s] + outcomeSpin.supportDelta[s]));
                 }
               }
             }
-            if (event.outcome.cloutDelta) newState.clout = Math.max(0, newState.clout + event.outcome.cloutDelta);
-            if (event.outcome.fundsDelta) newState.funds = Math.max(0, newState.funds + event.outcome.fundsDelta);
-            if (event.outcome.riskDelta) newState.risk = Math.max(0, newState.risk + event.outcome.riskDelta);
+            if (outcomeSpin.cloutDelta) newState.clout = Math.max(0, newState.clout + outcomeSpin.cloutDelta);
+            if (outcomeSpin.fundsDelta) newState.funds = Math.max(0, newState.funds + outcomeSpin.fundsDelta);
+            if (outcomeSpin.riskDelta) newState.risk = Math.max(0, newState.risk + outcomeSpin.riskDelta);
           }
           newState.newsLog.push(`${event.title}: ${event.description}`);
         }
@@ -1148,7 +1311,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         progressChain(event.chainId, action.optionIndex);
       }
 
-      const outcome = choice.outcome;
+      // Apply prepared bonus if event was investigated (Sprint 7)
+      let outcome = choice.outcome;
+      if (event.isPrepared) {
+        outcome = applyOutcomeWithMultiplier(outcome, PREPARED_BONUS_MULTIPLIER);
+      }
+
       const newSupport = { ...state.support };
 
       if (outcome.supportDelta) {
@@ -1418,6 +1586,36 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'INVESTIGATE_EVENT': {
+      const { eventId } = action;
+
+      // Check if event exists in queue
+      const queuedEvent = state.upcomingEvents.find(e => e.eventId === eventId);
+      if (!queuedEvent) {
+        return { ...state, newsLog: [...state.newsLog, 'No such event to investigate.'] };
+      }
+
+      // Check if already investigated
+      if (state.investigatedEventIds.includes(eventId)) {
+        return { ...state, newsLog: [...state.newsLog, 'You\'ve already investigated this event.'] };
+      }
+
+      // Check if player can afford investigation
+      if (state.clout < INVESTIGATION_CLOUT_COST) {
+        return { ...state, newsLog: [...state.newsLog, `Need ${INVESTIGATION_CLOUT_COST} clout to investigate.`] };
+      }
+
+      // Generate preview and mark as investigated
+      const preview = generateEventPreview(queuedEvent.event);
+
+      return {
+        ...state,
+        clout: state.clout - INVESTIGATION_CLOUT_COST,
+        investigatedEventIds: [...state.investigatedEventIds, eventId],
+        newsLog: [...state.newsLog, `🔍 Investigation complete! (-${INVESTIGATION_CLOUT_COST} clout)`, preview],
+      };
+    }
+
     case 'RESET_GAME': {
       resetEventTracking();
       resetChainTracking();
@@ -1533,6 +1731,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Sentiment (ensure exists)
           sentiment: parsed.sentiment ?? initializeSentimentState(),
           recentReactions: parsed.recentReactions ?? [],
+          // Advisor consultation (Sprint 6b)
+          advisorCooldowns: parsed.advisorCooldowns ?? {},
+          consultedAdvisor: parsed.consultedAdvisor ?? null,
+          // Event foreshadowing (Sprint 7)
+          upcomingEvents: parsed.upcomingEvents ?? [],
+          foreshadowingHints: parsed.foreshadowingHints ?? [],
+          investigatedEventIds: parsed.investigatedEventIds ?? [],
         };
       }
     } catch (error) {

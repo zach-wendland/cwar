@@ -400,9 +400,16 @@ const GameApp: React.FC = () => {
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ type: "spring", damping: 20 }}
             >
-              <h4 id="event-title" className="text-white text-2xl font-bold mb-3">
-                {pendingEvent.title}
-              </h4>
+              <div className="flex items-center gap-3 mb-3">
+                <h4 id="event-title" className="text-white text-2xl font-bold">
+                  {pendingEvent.title}
+                </h4>
+                {pendingEvent.isPrepared && (
+                  <span className="flex items-center gap-1 text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/30">
+                    ✅ Prepared (+15%)
+                  </span>
+                )}
+              </div>
               <p id="event-description" className="text-white/70 mb-4">{pendingEvent.description}</p>
               <div className="space-y-2" role="group" aria-label="Event choices">
                 {pendingEvent.options?.map((opt, idx) => (

@@ -1880,3 +1880,133 @@ export function generateFactionMoodTweet(
     content: `${moodEmoji} [${factionName}] ${content}`,
   };
 }
+
+// =========================
+// EVENT FORESHADOWING SYSTEM (Sprint 7)
+// =========================
+
+// Cryptic insider handles for foreshadowing hints
+const INSIDER_HANDLES = [
+  '@InsiderTip2025',
+  '@DCWhispers',
+  '@CapitolLeak',
+  '@AnonymousSource',
+  '@DeepStateWatch',
+  '@MediaInsider',
+  '@PoliticalPulse',
+  '@BeltwaySpy',
+];
+
+// Foreshadowing hint templates by event category
+const FORESHADOWING_TEMPLATES: Record<EventCategory, string[]> = {
+  tech: [
+    'Hearing whispers from Silicon Valley about something big brewing...',
+    'My sources in tech are nervous. Something\'s coming.',
+    'The algorithms are shifting. Brace yourselves.',
+    'Big Tech boardrooms are buzzing. Stay alert.',
+    'BREAKING SOON: Major tech announcement incoming. Details scarce.',
+  ],
+  media: [
+    'Media insiders are prepping something. Watch the headlines.',
+    'Tucker\'s team is working on a story. Could be huge.',
+    'Mainstream media coordination detected. Something\'s brewing.',
+    'My contacts at the networks are tight-lipped. That\'s never good.',
+    'Press conference being scheduled. Topic: classified.',
+  ],
+  political: [
+    'Capitol Hill is buzzing with rumors. Stay tuned.',
+    'Political operatives working overtime. Something\'s up.',
+    'Hearing chatter about a major political development...',
+    'The swamp is stirring. Can\'t say more yet.',
+    'Sources say politicians are nervous about something.',
+  ],
+  economic: [
+    'Market watchers are on edge. Something\'s moving.',
+    'Economic indicators pointing to a surprise. Watch out.',
+    'Wall Street whispers about an incoming announcement.',
+    'Donors are making moves. Follow the money.',
+    'Financial news incoming. Could shake things up.',
+  ],
+  cultural: [
+    'The culture war is about to heat up. Trust me.',
+    'Influencers are coordinating something. Big drama incoming.',
+    'Celebrity circles are buzzing. Prepare for impact.',
+    'Social media is about to explode. Insider info.',
+    'The discourse is shifting. Major event imminent.',
+  ],
+};
+
+/**
+ * Generate a cryptic foreshadowing hint for an upcoming event
+ * These appear in the social feed 1-2 turns before the event triggers
+ */
+export function generateForeshadowingHint(eventCategory: EventCategory, eventTitle: string): Tweet {
+  const handle = INSIDER_HANDLES[Math.floor(Math.random() * INSIDER_HANDLES.length)];
+  const templates = FORESHADOWING_TEMPLATES[eventCategory] || FORESHADOWING_TEMPLATES.political;
+  const baseHint = templates[Math.floor(Math.random() * templates.length)];
+
+  // Sometimes add a vague reference to the event topic
+  const addReference = Math.random() < 0.4;
+  const topicHint = addReference ? ` Something about "${eventTitle.split(' ')[0]}..."` : '';
+
+  return {
+    user: handle,
+    content: `🔮 ${baseHint}${topicHint}`,
+  };
+}
+
+/**
+ * Generate a detailed investigation preview for an event
+ * Shows when player spends clout to investigate
+ */
+export function generateEventPreview(event: GameEvent): string {
+  const optionCount = event.options?.length || 0;
+
+  if (optionCount > 0) {
+    const optionPreviews = event.options!.map((opt, idx) => {
+      const effects: string[] = [];
+      if (opt.outcome.supportDelta) effects.push('support');
+      if (opt.outcome.cloutDelta) effects.push(opt.outcome.cloutDelta > 0 ? 'clout gain' : 'clout loss');
+      if (opt.outcome.fundsDelta) effects.push(opt.outcome.fundsDelta > 0 ? 'funds gain' : 'funds loss');
+      if (opt.outcome.riskDelta) effects.push(opt.outcome.riskDelta > 0 ? 'risk increase' : 'risk reduction');
+      return `  ${idx + 1}. "${opt.text.substring(0, 30)}..." → ${effects.join(', ') || 'minor effects'}`;
+    }).join('\n');
+
+    return `📋 EVENT INTEL: "${event.title}"\n${event.description}\n\nOptions available:\n${optionPreviews}`;
+  }
+
+  return `📋 EVENT INTEL: "${event.title}"\n${event.description}\n\nThis is an automatic event with predetermined effects.`;
+}
+
+/**
+ * Get an event to queue for foreshadowing (picks from eligible events)
+ * Returns null if no suitable events available
+ */
+export function getEventForQueue(state: GameState): { event: GameEvent; eventId: string; category: EventCategory } | null {
+  const eligibleEvents = getEligibleEvents(state);
+
+  if (eligibleEvents.length === 0) {
+    return null;
+  }
+
+  // Pick a random eligible event (prefer ones with options for more engagement)
+  const withOptions = eligibleEvents.filter(e => e.options && e.options.length > 0);
+  const pool = withOptions.length > 0 && Math.random() < 0.7 ? withOptions : eligibleEvents;
+  const selected = pool[Math.floor(Math.random() * pool.length)];
+
+  // Mark as shown so we don't repeat
+  shownEventIds.add(selected.id);
+
+  const gameEvent: GameEvent = {
+    title: selected.title,
+    description: selected.description,
+    options: selected.options,
+    outcome: selected.outcome,
+  };
+
+  return {
+    event: gameEvent,
+    eventId: selected.id,
+    category: selected.category,
+  };
+}
