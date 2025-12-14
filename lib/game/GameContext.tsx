@@ -185,6 +185,9 @@ export interface GameState {
   activeSeason?: SeasonalEvent;
   // Tutorial system
   tutorial: TutorialState;
+  // Advisor consultation system (Sprint 6b)
+  advisorCooldowns: { [advisorName: string]: number };
+  consultedAdvisor: string | null;
 }
 
 // Actions for the reducer
@@ -201,7 +204,8 @@ type GameAction =
   | { type: 'DISMISS_TUTORIAL' }
   | { type: 'COMPLETE_TUTORIAL_STEP'; step: TutorialStep }
   | { type: 'SET_TUTORIAL_STEP'; step: TutorialStep | null }
-  | { type: 'MARK_FEATURE_SEEN'; feature: keyof TutorialState['firstTimeFeatures'] };
+  | { type: 'MARK_FEATURE_SEEN'; feature: keyof TutorialState['firstTimeFeatures'] }
+  | { type: 'CONSULT_ADVISOR'; advisorName: string };
 
 // Critical hit chance (nerfed from 10% to 8%)
 const CRITICAL_HIT_CHANCE = 0.08;
@@ -285,6 +289,9 @@ function createInitialState(): GameState {
     activeSeason: getCurrentSeason() || undefined,
     // Tutorial system - check localStorage for returning players
     tutorial: loadTutorialState(),
+    // Advisor consultation system (Sprint 6b)
+    advisorCooldowns: {},
+    consultedAdvisor: null,
   };
 }
 
@@ -460,6 +467,22 @@ function getDefeatMessage(type: DefeatType): string {
   }
 }
 
+// Advisor consultation constants
+const ADVISOR_COOLDOWN_TURNS = 3; // Turns before advisor can be consulted again
+const CONSULTATION_BONUS_MULTIPLIER = 1.25; // 25% bonus to next action
+
+// Tick advisor cooldowns (reduce by 1 each turn)
+function tickAdvisorCooldowns(cooldowns: { [name: string]: number }): { [name: string]: number } {
+  const newCooldowns: { [name: string]: number } = {};
+  for (const name in cooldowns) {
+    const remaining = cooldowns[name] - 1;
+    if (remaining > 0) {
+      newCooldowns[name] = remaining;
+    }
+  }
+  return newCooldowns;
+}
+
 // Reducer to handle game state transitions
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -540,6 +563,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Apply advisor ability bonuses
       outcome = applyAdvisorBonus(outcome, config.id, advisorNames);
+
+      // Apply consultation bonus if an advisor was consulted this turn (Sprint 6b)
+      if (state.consultedAdvisor) {
+        outcome = applyOutcomeWithMultiplier(outcome, CONSULTATION_BONUS_MULTIPLIER);
+      }
 
       // Apply sentiment multiplier to clout gains (Sprint 6a: Social Pulse)
       // Coalition mood affects how much clout you gain - enthusiastic = 1.3x, hostile = 0.4x
@@ -640,6 +668,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Update cooldowns and consecutive uses
       const updatedCooldowns = setActionCooldown(action.actionId, tickCooldowns(state.actionCooldowns));
       const updatedConsecutiveUses = updateConsecutiveUses(action.actionId, state.consecutiveActionUses);
+      // Tick advisor cooldowns (Sprint 6b)
+      const updatedAdvisorCooldowns = tickAdvisorCooldowns(state.advisorCooldowns);
 
       // Track economic totals
       const fundsGained = outcome.fundsDelta && outcome.fundsDelta > 0 ? outcome.fundsDelta : 0;
@@ -677,6 +707,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Action economy tracking
         actionCooldowns: updatedCooldowns,
         consecutiveActionUses: updatedConsecutiveUses,
+        // Advisor consultation (Sprint 6b) - clear after action, tick cooldowns
+        advisorCooldowns: updatedAdvisorCooldowns,
+        consultedAdvisor: null,
         // Economic tracking
         totalFundsEarned: state.totalFundsEarned + fundsGained,
         totalCloutEarned: state.totalCloutEarned + cloutGained,
@@ -806,6 +839,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         outcome = applyOutcomeWithMultiplier(outcome, sessionMultiplier);
       }
 
+      // Apply consultation bonus if an advisor was consulted this turn (Sprint 6b)
+      if (state.consultedAdvisor) {
+        outcome = applyOutcomeWithMultiplier(outcome, CONSULTATION_BONUS_MULTIPLIER);
+      }
+
       // Deduct costs
       let newFunds = state.funds - spinCost.funds;
       let newClout = state.clout - spinCost.clout;
@@ -903,6 +941,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // Update cooldowns (spin actions don't have traditional cooldowns, but we tick them)
       const updatedCooldowns = tickCooldowns(state.actionCooldowns);
+      // Tick advisor cooldowns (Sprint 6b)
+      const updatedAdvisorCooldowns = tickAdvisorCooldowns(state.advisorCooldowns);
 
       // Track economic totals
       const fundsGained = outcome.fundsDelta && outcome.fundsDelta > 0 ? outcome.fundsDelta : 0;
@@ -937,6 +977,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         factionSupport: newFactionSupport,
         actionCooldowns: updatedCooldowns,
         consecutiveActionUses: state.consecutiveActionUses,
+        // Advisor consultation (Sprint 6b) - clear after action, tick cooldowns
+        advisorCooldowns: updatedAdvisorCooldowns,
+        consultedAdvisor: null,
         totalFundsEarned: state.totalFundsEarned + fundsGained,
         totalCloutEarned: state.totalCloutEarned + cloutGained,
         consecutiveNegativeFunds: newConsecutiveNegativeFunds,
@@ -1334,6 +1377,44 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         tutorial: newTutorial,
+      };
+    }
+
+    case 'CONSULT_ADVISOR': {
+      const { advisorName } = action;
+
+      // Check if advisor exists
+      const advisorExists = state.advisors.some(a => a.name === advisorName);
+      if (!advisorExists) {
+        return { ...state, newsLog: [...state.newsLog, `Advisor "${advisorName}" not found.`] };
+      }
+
+      // Check cooldown
+      const cooldownRemaining = state.advisorCooldowns[advisorName] || 0;
+      if (cooldownRemaining > 0) {
+        return {
+          ...state,
+          newsLog: [...state.newsLog, `${advisorName} is unavailable for ${cooldownRemaining} more turn(s).`]
+        };
+      }
+
+      // Check if already consulted this turn
+      if (state.consultedAdvisor) {
+        return {
+          ...state,
+          newsLog: [...state.newsLog, `Already consulted ${state.consultedAdvisor} this turn.`]
+        };
+      }
+
+      // Set the consulted advisor and start cooldown
+      return {
+        ...state,
+        consultedAdvisor: advisorName,
+        advisorCooldowns: {
+          ...state.advisorCooldowns,
+          [advisorName]: ADVISOR_COOLDOWN_TURNS,
+        },
+        newsLog: [...state.newsLog, `📞 Consulted ${advisorName}! Next action gets +25% bonus.`],
       };
     }
 

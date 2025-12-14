@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, DollarSign, Lock, Sparkles, Clock, TrendingDown } from "lucide-react";
+import { Zap, DollarSign, Lock, Sparkles, Clock, TrendingDown, Phone } from "lucide-react";
 
 interface ActionCardProps {
   id: string;
@@ -15,6 +15,7 @@ interface ActionCardProps {
   cooldownTurns?: number;
   disabledReason?: string;
   diminishedMultiplier?: number;
+  consultationBonus?: boolean;
 }
 
 const ActionCard: React.FC<ActionCardProps> = ({
@@ -28,6 +29,7 @@ const ActionCard: React.FC<ActionCardProps> = ({
   cooldownTurns = 0,
   disabledReason,
   diminishedMultiplier = 1,
+  consultationBonus = false,
 }) => {
   const [isPressed, setIsPressed] = useState(false);
   const [showRipple, setShowRipple] = useState(false);
@@ -96,6 +98,16 @@ const ActionCard: React.FC<ActionCardProps> = ({
               animate={{ scale: 1, rotate: [0, 10, -10, 0] }}
             >
               <Sparkles size={14} /> CRIT!
+            </motion.span>
+          )}
+          {consultationBonus && (
+            <motion.span
+              className="flex items-center gap-0.5 text-xs bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+            >
+              <Phone size={10} className="animate-pulse" />
+              +25%
             </motion.span>
           )}
         </div>

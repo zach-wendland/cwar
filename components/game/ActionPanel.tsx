@@ -167,6 +167,7 @@ const ActionPanel: React.FC = () => {
                   cooldownTurns={cooldownCheck.onCooldown ? cooldownCheck.turnsRemaining : 0}
                   disabledReason={disabledReason}
                   diminishedMultiplier={diminishedMultiplier}
+                  consultationBonus={!!state.consultedAdvisor}
                 />
               </motion.div>
             );

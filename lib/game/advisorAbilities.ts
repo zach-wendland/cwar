@@ -21,28 +21,28 @@ export type AbilityEffect =
   | { type: 'faction_bonus'; factionId: string; percent: number }   // Bonus faction effect
   | { type: 'event_reveal' };                                       // Show event outcomes before choosing
 
-// Pre-defined advisor abilities
+// Pre-defined advisor abilities - names must match generateAdvisors() output
 export const ADVISOR_ABILITIES: { [advisorName: string]: AdvisorAbility } = {
-  'Mike "MemeLord" Miller': {
-    id: 'meme_master',
-    name: 'Meme Master',
-    description: '+20% effect from Meme Campaign, +5% critical hit chance',
+  'Chad "DOGE" Williams': {
+    id: 'efficiency_expert',
+    name: 'Efficiency Expert',
+    description: 'Fundraise and Grassroots cost 15% less. Cut the fat!',
+    icon: '⚡',
+    effect: { type: 'action_discount', actionId: 'fundraise', discount: 15 },
+  },
+  'Dana "Dark MAGA" Reyes': {
+    id: 'aesthetic_amplifier',
+    name: 'Aesthetic Amplifier',
+    description: '+20% effect on Meme Campaign. Dark MAGA energy is contagious.',
     icon: '🎭',
     effect: { type: 'action_bonus', actionId: 'meme_campaign', bonus: 20 },
   },
-  'Dana Data': {
-    id: 'data_driven',
-    name: 'Data-Driven',
-    description: 'All support gains +10%, can preview event outcomes',
-    icon: '📊',
-    effect: { type: 'support_bonus', percent: 10 },
-  },
-  'Riley Rebel': {
-    id: 'rally_leader',
-    name: 'Rally Leader',
-    description: 'Rally costs 25% less funds, +15% Rally effect',
-    icon: '📢',
-    effect: { type: 'action_discount', actionId: 'rally', discount: 25 },
+  "Tucker's Intern Kyle": {
+    id: 'media_connections',
+    name: 'Media Connections',
+    description: '+10% critical hit chance on all actions. Those contacts pay off.',
+    icon: '📺',
+    effect: { type: 'critical_chance', bonus: 10 },
   },
 };
 
@@ -150,8 +150,9 @@ export function getCriticalBonus(advisorNames: string[]): number {
     }
   });
 
-  // Mike "MemeLord" also gives +5% crit
-  if (advisorNames.includes('Mike "MemeLord" Miller')) {
+  // Kyle's Media Connections ability is already counted above via critical_chance effect type
+  // Dana also provides a small crit bonus when her aesthetic matches the action vibe
+  if (advisorNames.includes('Dana "Dark MAGA" Reyes')) {
     bonus += 5;
   }
 
@@ -160,8 +161,11 @@ export function getCriticalBonus(advisorNames: string[]): number {
 
 // Check if any advisor has event reveal ability
 export function hasEventReveal(advisorNames: string[]): boolean {
-  // Dana Data's ability includes event preview
-  return advisorNames.includes('Dana Data');
+  // Event reveal will be added in Sprint 7 as an advisor investigation ability
+  return advisorNames.some(name => {
+    const ability = ADVISOR_ABILITIES[name];
+    return ability?.effect.type === 'event_reveal';
+  });
 }
 
 // Get advisor ability info for display

@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Dices, Lock, Unlock, Zap, DollarSign, Play } from "lucide-react";
+import { Dices, Lock, Unlock, Zap, DollarSign, Play, Phone } from "lucide-react";
 import { useGameContext } from "@/lib/game/GameContext";
 import {
   SpinState,
@@ -355,6 +355,12 @@ const SpinWheel: React.FC = () => {
           >
             <Play size={18} />
             EXECUTE
+            {state.consultedAdvisor && (
+              <span className="flex items-center gap-1 text-xs bg-cyan-400/20 px-1.5 py-0.5 rounded">
+                <Phone size={10} className="animate-pulse" />
+                +25%
+              </span>
+            )}
           </motion.button>
         )}
       </div>
